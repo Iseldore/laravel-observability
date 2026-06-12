@@ -1,0 +1,44 @@
+{
+    "name": "iseldore/laravel-observability",
+    "description": "Observabilité Laravel pour OpenObserve : logs structurés (Monolog 2/3) en queue async + routes health (liveness/deep).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "openobserve", "observability", "logging", "health", "monolog"],
+    "require": {
+        "php": ">=7.3",
+        "monolog/monolog": "^2 || ^3",
+        "illuminate/support": "^8 || ^9 || ^10 || ^11 || ^12",
+        "illuminate/queue": "^8 || ^9 || ^10 || ^11 || ^12",
+        "illuminate/http": "^8 || ^9 || ^10 || ^11 || ^12",
+        "guzzlehttp/guzzle": "^7.4"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^6 || ^7 || ^8 || ^9 || ^10",
+        "pestphp/pest": "^1 || ^2 || ^3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Gysc\\Observability\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Gysc\\Observability\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Gysc\\Observability\\ObservabilityServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

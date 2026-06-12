@@ -1,0 +1,66 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Couvre Marlenka : Laravel 8 / Monolog 2 / PHP 8.1 — le cas le plus ancien.
+          # Laravel 8 nécessite guzzle/promises 1.x pour que Http::fake() fonctionne.
+          - php: '8.1'
+            laravel: '^8.0'
+            testbench: '^6.0'
+            monolog: '^2.0'
+            extra: '"guzzlehttp/guzzle:^7.4" "guzzlehttp/promises:^1.5"'
+          # Couvre Salambo : Laravel 10 / Monolog 3.
+          - php: '8.1'
+            laravel: '^10.0'
+            testbench: '^8.0'
+            monolog: '^3.0'
+          # Couvre LemonPie : Laravel 12 / Monolog 3 / PHP 8.3.
+          - php: '8.3'
+            laravel: '^12.0'
+            testbench: '^10.0'
+            monolog: '^3.0'
+
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }} · Monolog ${{ matrix.monolog }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Allow plugins & disable insecure block (Laravel 8 est EOL)
+        run: |
+          composer config allow-plugins.pestphp/pest-plugin true
+          composer config audit.block-insecure false
+
+      - name: Pin Laravel, Testbench, Monolog (+ extras) versions
+        run: |
+          composer require --dev --no-update \
+            "laravel/framework:${{ matrix.laravel }}" \
+            "orchestra/testbench:${{ matrix.testbench }}" \
+            "monolog/monolog:${{ matrix.monolog }}" ${{ matrix.extra }}
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress --no-audit
+
+      - name: Run Pest
+        run: vendor/bin/pest --no-coverage
+        env:
+          CI: 'true'
