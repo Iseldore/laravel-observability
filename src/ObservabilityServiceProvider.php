@@ -2,8 +2,23 @@
 
 namespace Gysc\Observability;
 
+use Gysc\Observability\Auth\AuthLogger;
+use Gysc\Observability\Console\ObservabilityTestCommand;
+use Gysc\Observability\Database\QueryLogger;
 use Gysc\Observability\Http\Middleware\VerifyHealthToken;
+use Gysc\Observability\Http\OutboundHttpLogger;
+use Gysc\Observability\Http\RequestLogger;
 use Gysc\Observability\Logging\OpenObserveHandler;
+use Gysc\Observability\Queue\JobLogger;
+use Illuminate\Auth\Events\Failed as AuthFailed;
+use Illuminate\Auth\Events\Login as AuthLogin;
+use Illuminate\Auth\Events\Logout as AuthLogout;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Http\Client\Events\ResponseReceived;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Handler\BufferHandler;
@@ -21,7 +36,16 @@ class ObservabilityServiceProvider extends ServiceProvider
             __DIR__.'/../config/observability.php' => $this->app->configPath('observability.php'),
         ], 'observability-config');
 
+        if ($this->app->runningInConsole()) {
+            $this->commands([ObservabilityTestCommand::class]);
+        }
+
         $this->registerHealthRoutes();
+        $this->registerSlowQueryLogger();
+        $this->registerRequestLogger();
+        $this->registerJobLogger();
+        $this->registerAuthLogger();
+        $this->registerOutboundHttpLogger();
         $this->registerOctaneFlush();
     }
 
@@ -49,6 +73,61 @@ class ObservabilityServiceProvider extends ServiceProvider
                 $router->get('/health/deep', [\Gysc\Observability\Http\Controllers\HealthController::class, 'deep'])
                     ->middleware($deepMiddleware);
             });
+    }
+
+    private function registerSlowQueryLogger(): void
+    {
+        if (! config('observability.slow_query.enabled')) {
+            return;
+        }
+
+        $this->app['events']->listen(QueryExecuted::class, QueryLogger::class);
+    }
+
+    private function registerRequestLogger(): void
+    {
+        if (! config('observability.request_log.enabled')) {
+            return;
+        }
+
+        $this->app['events']->listen(RequestHandled::class, RequestLogger::class);
+    }
+
+    private function registerJobLogger(): void
+    {
+        if (! config('observability.job_log.enabled')) {
+            return;
+        }
+
+        $events = $this->app['events'];
+        $logger = app(JobLogger::class);
+
+        $events->listen(JobProcessed::class, [$logger, 'handleProcessed']);
+        $events->listen(JobFailed::class,    [$logger, 'handleFailed']);
+        $events->listen(JobTimedOut::class,  [$logger, 'handleTimedOut']);
+    }
+
+    private function registerAuthLogger(): void
+    {
+        if (! config('observability.auth_log.enabled')) {
+            return;
+        }
+
+        $events = $this->app['events'];
+        $logger = app(AuthLogger::class);
+
+        $events->listen(AuthLogin::class,   [$logger, 'handleLogin']);
+        $events->listen(AuthLogout::class,  [$logger, 'handleLogout']);
+        $events->listen(AuthFailed::class,  [$logger, 'handleFailed']);
+    }
+
+    private function registerOutboundHttpLogger(): void
+    {
+        if (! config('observability.outbound_http_log.enabled')) {
+            return;
+        }
+
+        $this->app['events']->listen(ResponseReceived::class, OutboundHttpLogger::class);
     }
 
     /**

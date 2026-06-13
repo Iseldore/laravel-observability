@@ -54,6 +54,70 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | HTTP request logging (requêtes entrantes)
+    |--------------------------------------------------------------------------
+    | Logge chaque requête avec method, path, status_code, duration_ms.
+    | Les assets statiques (js/css/images) sont filtrés automatiquement.
+    */
+
+    'request_log' => [
+        'enabled' => env('REQUEST_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Job queue logging
+    |--------------------------------------------------------------------------
+    | Logge JobProcessed (info), JobFailed (error), JobTimedOut (error).
+    | SendLogsToOpenObserve est toujours exclu (anti-récursion).
+    */
+
+    'job_log' => [
+        'enabled' => env('JOB_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Auth logging
+    |--------------------------------------------------------------------------
+    | Logge Login (info), Logout (info), Failed (warning).
+    | N'envoie jamais de mot de passe — uniquement email/user_id si disponible.
+    */
+
+    'auth_log' => [
+        'enabled' => env('AUTH_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP sortant logging
+    |--------------------------------------------------------------------------
+    | Logge les appels Http:: sortants : method, host, path, status_code, duration_ms.
+    | Les appels vers OpenObserve lui-même sont exclus (anti-récursion).
+    | Jamais de query string (peut contenir des tokens).
+    */
+
+    'outbound_http_log' => [
+        'enabled' => env('OUTBOUND_HTTP_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Slow query logging
+    |--------------------------------------------------------------------------
+    | enabled         : activer l'écoute de QueryExecuted.
+    | threshold_ms    : seuil en millisecondes — les requêtes plus lentes sont envoyées.
+    | log_bindings    : inclure les bindings SQL (peut contenir des données sensibles).
+    */
+
+    'slow_query' => [
+        'enabled'      => env('SLOW_QUERY_LOG', false),
+        'threshold_ms' => (float) env('SLOW_QUERY_THRESHOLD_MS', 1000),
+        'log_bindings' => env('SLOW_QUERY_LOG_BINDINGS', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Routes health
     |--------------------------------------------------------------------------
     | enabled        : enregistrer les routes /health et /health/deep.
