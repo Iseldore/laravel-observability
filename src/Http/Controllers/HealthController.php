@@ -69,7 +69,7 @@ class HealthController
         return $this->guard(function () {
             $key = 'observability:health:'.bin2hex(random_bytes(4));
             Cache::put($key, 1, 5);
-            $ok = Cache::get($key) === 1;
+            $ok = Cache::get($key) == 1;
             Cache::forget($key);
 
             return $ok ? 'ok' : 'fail';
