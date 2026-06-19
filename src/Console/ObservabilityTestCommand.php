@@ -24,7 +24,7 @@ class ObservabilityTestCommand extends Command
 
     protected $description = 'Envoie des données de test vers OpenObserve pour valider la config et peupler les dashboards';
 
-    private const TYPES = ['logs', 'slow_query', 'http_request', 'jobs', 'auth', 'http_outbound', 'health_check'];
+    private const TYPES = ['logs', 'slow_query', 'http_request', 'jobs', 'auth', 'http_outbound', 'health_check', 'deploy', 'scheduled_task', 'exception', 'cache_stats'];
 
     public function handle(): int
     {
@@ -294,6 +294,132 @@ class ObservabilityTestCommand extends Command
                 'check_db' => $db,
                 'check_cache' => $cache,
                 'check_queue' => $queue,
+            ];
+        }, range(0, $count - 1));
+    }
+
+
+    private function generate_deploy(int $count, string $service, string $env): array
+    {
+        $commits = ['a1b2c3d', 'e4f5g6h', '1234567', 'abcdef0'];
+        $tags = ['v1.2.0', 'v1.2.1', 'v1.3.0', null];
+        $deployers = ['Thomas Renier', 'CI/CD Pipeline', 'GitHub Actions'];
+        $messages = [
+            'Hotfix: fix login redirect loop',
+            'Feature: add deploy markers to observability',
+            'Release candidate 1.3.0',
+            null,
+        ];
+
+        return array_map(function ($i) use ($commits, $tags, $deployers, $messages, $service, $env) {
+            $payload = [
+                '_timestamp'     => $this->ts(-$i * 3600),
+                'level'          => 'info',
+                'message'        => 'deploy',
+                'service'        => $service,
+                'env'            => $env,
+                'commit'         => $commits[$i % count($commits)],
+                'deployer'       => $deployers[$i % count($deployers)],
+            ];
+
+            $tag = $tags[$i % count($tags)];
+            if ($tag !== null) {
+                $payload['tag'] = $tag;
+            }
+
+            $msg = $messages[$i % count($messages)];
+            if ($msg !== null) {
+                $payload['deploy_message'] = $msg;
+            }
+
+            return $payload;
+        }, range(0, $count - 1));
+    }
+
+    private function generate_scheduled_task(int $count, string $service, string $env): array
+    {
+        $tasks = [
+            ['send-daily-digest',         'scheduled_task_finished', 12.4, 0,    null, null],
+            ['cleanup-expired-sessions',  'scheduled_task_finished', 3.1,  0,    null, null],
+            ['sync-external-users',       'scheduled_task_failed',   null, null, 'RuntimeException', 'API timeout after 30s'],
+            ['generate-monthly-report',   'scheduled_task_finished', 45.8, 0,    null, null],
+            ['prune-old-notifications',   'scheduled_task_finished', 1.2,  0,    null, null],
+        ];
+
+        return array_map(function ($i) use ($tasks, $service, $env) {
+            [$task, $message, $duration, $exit, $exClass, $exMsg] = $tasks[$i % count($tasks)];
+
+            $payload = [
+                '_timestamp' => $this->ts(-$i * 300),
+                'level'      => $message === 'scheduled_task_finished' ? 'info' : 'error',
+                'message'    => $message,
+                'service'    => $service,
+                'env'        => $env,
+                'task'       => $task,
+                'expression' => '* * * * *',
+            ];
+
+            if ($duration !== null) {
+                $payload['duration_s'] = $duration;
+            }
+            if ($exit !== null) {
+                $payload['exit_code'] = $exit;
+            }
+            if ($exClass !== null) {
+                $payload['exception_class']   = $exClass;
+                $payload['exception_message'] = $exMsg;
+            }
+
+            return $payload;
+        }, range(0, $count - 1));
+    }
+
+    private function generate_exception(int $count, string $service, string $env): array
+    {
+        $exceptions = [
+            ['App\Exceptions\PaymentFailedException', 'Payment gateway returned status 502', 'app/Services/PaymentService.php', 142],
+            ['Illuminate\Database\QueryException',    'SQLSTATE[HY000] [2002] Connection refused', 'vendor/laravel/framework/src/Illuminate/Database/Connection.php', 760],
+            ['RuntimeException',                      'File not found: /storage/exports/report.pdf', 'app/Http/Controllers/ExportController.php', 55],
+            ['TypeError',                             'Argument #1 must be of type string, null given', 'app/Services/UserService.php', 88],
+        ];
+
+        return array_map(function ($i) use ($exceptions, $service, $env) {
+            [$class, $msg, $file, $line] = $exceptions[$i % count($exceptions)];
+
+            return [
+                '_timestamp'        => $this->ts(-$i * 180),
+                'level'             => 'error',
+                'message'           => 'exception',
+                'service'           => $service,
+                'env'               => $env,
+                'exception_class'   => $class,
+                'exception_message' => $msg,
+                'exception_file'    => $file,
+                'exception_line'    => $line,
+                'exception_trace'   => [
+                    $class.'::__construct() at '.$file.':'.$line,
+                    'App\Http\Controllers\Controller::handle() at app/Http/Controllers/Controller.php:30',
+                ],
+            ];
+        }, range(0, $count - 1));
+    }
+
+    private function generate_cache_stats(int $count, string $service, string $env): array
+    {
+        return array_map(function ($i) use ($service, $env) {
+            $hits = mt_rand(20, 150);
+            $misses = mt_rand(2, 30);
+            $total = $hits + $misses;
+
+            return [
+                '_timestamp' => $this->ts(-$i * 60),
+                'level'      => 'info',
+                'message'    => 'cache_stats',
+                'service'    => $service,
+                'env'        => $env,
+                'hits'       => $hits,
+                'misses'     => $misses,
+                'hit_ratio'  => round($hits * 100.0 / $total, 1),
             ];
         }, range(0, $count - 1));
     }

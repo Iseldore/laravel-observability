@@ -54,7 +54,16 @@ class RequestLogger
                 $payload['duration_ms'] = $durationMs;
             }
 
-            if ($routeName = $request->route()?->getName()) {
+            $payload['memory_peak_kb'] = (int) round(memory_get_peak_usage(true) / 1024);
+
+            try {
+                $payload['response_size'] = strlen($response->getContent());
+            } catch (\Throwable $ignored) {
+                // StreamedResponse n'a pas de getContent — on omet le champ.
+            }
+
+            $route = $request->route();
+            if ($route !== null && ($routeName = $route->getName())) {
                 $payload['route'] = $routeName;
             }
 

@@ -3,24 +3,29 @@
 namespace Gysc\Observability;
 
 use Gysc\Observability\Auth\AuthLogger;
+use Gysc\Observability\Cache\CacheLogger;
+use Gysc\Observability\Console\DeployMarkerCommand;
 use Gysc\Observability\Console\HealthHeartbeatCommand;
 use Gysc\Observability\Console\ObservabilityTestCommand;
 use Gysc\Observability\Database\QueryLogger;
+use Gysc\Observability\Exception\ExceptionLogger;
 use Gysc\Observability\Http\Middleware\VerifyHealthToken;
 use Gysc\Observability\Http\OutboundHttpLogger;
 use Gysc\Observability\Http\RequestLogger;
 use Gysc\Observability\Logging\OpenObserveHandler;
 use Gysc\Observability\Queue\JobLogger;
+use Gysc\Observability\Scheduler\SchedulerLogger;
 use Illuminate\Auth\Events\Failed as AuthFailed;
 use Illuminate\Auth\Events\Login as AuthLogin;
 use Illuminate\Auth\Events\Logout as AuthLogout;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Http\Client\Events\ResponseReceived;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobTimedOut;
-use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Handler\BufferHandler;
@@ -41,6 +46,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ObservabilityTestCommand::class,
+                DeployMarkerCommand::class,
                 HealthHeartbeatCommand::class,
             ]);
         }
@@ -52,6 +58,9 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->registerJobLogger();
         $this->registerAuthLogger();
         $this->registerOutboundHttpLogger();
+        $this->registerSchedulerLogger();
+        $this->registerExceptionLogger();
+        $this->registerCacheLogger();
         $this->registerOctaneFlush();
     }
 
@@ -147,6 +156,59 @@ class ObservabilityServiceProvider extends ServiceProvider
         }
 
         $this->app['events']->listen(ResponseReceived::class, OutboundHttpLogger::class);
+    }
+
+    private function registerSchedulerLogger(): void
+    {
+        if (! config('observability.scheduler_log.enabled')) {
+            return;
+        }
+
+        $events = $this->app['events'];
+        $logger = app(SchedulerLogger::class);
+
+        $finished = 'Illuminate\Console\Events\ScheduledTaskFinished';
+        $failed   = 'Illuminate\Console\Events\ScheduledTaskFailed';
+
+        if (class_exists($finished)) {
+            $events->listen($finished, [$logger, 'handleFinished']);
+        }
+        if (class_exists($failed)) {
+            $events->listen($failed, [$logger, 'handleFailed']);
+        }
+    }
+
+    private function registerExceptionLogger(): void
+    {
+        if (! config('observability.exception_log.enabled')) {
+            return;
+        }
+
+        $this->app['events']->listen(MessageLogged::class, ExceptionLogger::class);
+    }
+
+    private function registerCacheLogger(): void
+    {
+        if (! config('observability.cache_log.enabled')) {
+            return;
+        }
+
+        $events = $this->app['events'];
+        $logger = app(CacheLogger::class);
+
+        $hit    = 'Illuminate\Cache\Events\CacheHit';
+        $missed = 'Illuminate\Cache\Events\CacheMissed';
+
+        if (class_exists($hit)) {
+            $events->listen($hit, [$logger, 'handleHit']);
+        }
+        if (class_exists($missed)) {
+            $events->listen($missed, [$logger, 'handleMissed']);
+        }
+
+        $events->listen(RequestHandled::class, function () use ($logger) {
+            $logger->flush();
+        });
     }
 
     /**

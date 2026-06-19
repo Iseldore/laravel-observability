@@ -103,6 +103,43 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Scheduler logging
+    |--------------------------------------------------------------------------
+    | Logge ScheduledTaskFinished (info) et ScheduledTaskFailed (error).
+    | Requiert Laravel 8+ (events de scheduling).
+    */
+
+    'scheduler_log' => [
+        'enabled' => env('SCHEDULER_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Exception logging structuré
+    |--------------------------------------------------------------------------
+    | Écoute MessageLogged (level error+) et envoie un payload structuré avec
+    | classe, fichier, ligne, trace (5 frames max). Ne duplique pas les exceptions
+    | déjà traitées par le JobLogger.
+    */
+
+    'exception_log' => [
+        'enabled' => env('EXCEPTION_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache hit/miss logging
+    |--------------------------------------------------------------------------
+    | Agrège les hits/misses par requête et envoie un seul payload cache_stats
+    | en fin de requête. Les clés observability:* sont exclues.
+    */
+
+    'cache_log' => [
+        'enabled' => env('CACHE_LOG', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Slow query logging
     |--------------------------------------------------------------------------
     | enabled         : activer l'écoute de QueryExecuted.
