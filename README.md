@@ -57,3 +57,58 @@ l'envoi échoue silencieusement — l'application n'est jamais impactée.
 > ⚠️ **À faire manuellement dans chaque app** : exempter `health` du mode maintenance, sinon `artisan down`
 > rend `/health` indisponible et l'ALB tue les tasks. Ajouter `'health'` à `$except` de
 > `app/Http/Middleware/PreventRequestsDuringMaintenance.php`.
+
+## Listeners automatiques
+
+Chaque listener est activable individuellement via `.env`. Tous sont fail-silent et n'impactent jamais l'application.
+
+| Variable `.env` | Type de log | Données envoyées |
+|-----------------|-------------|------------------|
+| `REQUEST_LOG=true` | `http_request` | method, path, status, duration_ms, memory_peak_kb, response_size |
+| `OUTBOUND_HTTP_LOG=true` | `http_outbound` | method, host, path, status, duration_ms |
+| `SLOW_QUERY_LOG=true` | `slow_query` | SQL, duration_ms, connection (seuil configurable) |
+| `JOB_LOG=true` | `job_processed` / `job_failed` / `job_timed_out` | job_class, queue, attempts, exception |
+| `AUTH_LOG=true` | `auth_login` / `auth_logout` / `auth_failed` | user_id, email, guard |
+| `SCHEDULER_LOG=true` | `scheduled_task_finished` / `scheduled_task_failed` | task, expression, duration_s, exit_code |
+| `EXCEPTION_LOG=true` | `exception` | exception_class, file, line, trace (5 frames) |
+| `CACHE_LOG=true` | `cache_stats` | hits, misses, hit_ratio (agrégé par requête) |
+
+### Slow queries
+
+```env
+SLOW_QUERY_LOG=true
+SLOW_QUERY_THRESHOLD_MS=1000          # seuil en ms
+SLOW_QUERY_LOG_BINDINGS=false         # inclure les bindings (peut contenir des données sensibles)
+```
+
+## Heartbeat
+
+La commande `observability:heartbeat` appelle `/health/deep` en interne, mesure la latence de chaque composant (DB, cache, queue), collecte la taille des queues (compatible Horizon), et pousse le résultat dans OpenObserve.
+
+```env
+HEALTH_HEARTBEAT_ENABLED=true
+HEALTH_HEARTBEAT_SCHEDULE=everyMinute   # méthode Laravel Schedule
+```
+
+Le scheduling est automatique via le ServiceProvider — il suffit que `schedule:run` tourne en cron.
+
+Le payload `health_check` contient : `status`, `duration_ms`, `check_db`, `check_cache`, `check_queue`, `queue_sizes`.
+
+## Marqueur de déploiement
+
+```bash
+php artisan observability:deploy
+php artisan observability:deploy --tag=v1.2.0 --message="Hotfix login"
+```
+
+Envoie un log `message=deploy` avec le commit SHA, le tag, le deployer (détectés automatiquement via git si non fournis). À intégrer dans le pipeline CI/CD pour corréler les incidents avec les déploiements.
+
+## Commande de test
+
+```bash
+php artisan observability:test                    # tous les types
+php artisan observability:test --type=health_check,deploy
+php artisan observability:test --count=10 --dry-run
+```
+
+Génère des payloads réalistes pour tous les types de logs : `logs`, `slow_query`, `http_request`, `jobs`, `auth`, `http_outbound`, `health_check`, `deploy`, `scheduled_task`, `exception`, `cache_stats`.
