@@ -3,6 +3,7 @@
 namespace Gysc\Observability;
 
 use Gysc\Observability\Auth\AuthLogger;
+use Gysc\Observability\Console\HealthHeartbeatCommand;
 use Gysc\Observability\Console\ObservabilityTestCommand;
 use Gysc\Observability\Database\QueryLogger;
 use Gysc\Observability\Http\Middleware\VerifyHealthToken;
@@ -19,6 +20,7 @@ use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobTimedOut;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Handler\BufferHandler;
@@ -37,10 +39,14 @@ class ObservabilityServiceProvider extends ServiceProvider
         ], 'observability-config');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ObservabilityTestCommand::class]);
+            $this->commands([
+                ObservabilityTestCommand::class,
+                HealthHeartbeatCommand::class,
+            ]);
         }
 
         $this->registerHealthRoutes();
+        $this->registerHeartbeatSchedule();
         $this->registerSlowQueryLogger();
         $this->registerRequestLogger();
         $this->registerJobLogger();
@@ -73,6 +79,19 @@ class ObservabilityServiceProvider extends ServiceProvider
                 $router->get('/health/deep', [\Gysc\Observability\Http\Controllers\HealthController::class, 'deep'])
                     ->middleware($deepMiddleware);
             });
+    }
+
+    private function registerHeartbeatSchedule(): void
+    {
+        if (! config('observability.heartbeat.enabled')) {
+            return;
+        }
+
+        $this->app->booted(function () {
+            $schedule = $this->app->make(Schedule::class);
+            $method = config('observability.heartbeat.schedule', 'everyMinute');
+            $schedule->command('observability:heartbeat')->withoutOverlapping()->$method();
+        });
     }
 
     private function registerSlowQueryLogger(): void

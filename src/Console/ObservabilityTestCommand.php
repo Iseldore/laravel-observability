@@ -24,7 +24,7 @@ class ObservabilityTestCommand extends Command
 
     protected $description = 'Envoie des données de test vers OpenObserve pour valider la config et peupler les dashboards';
 
-    private const TYPES = ['logs', 'slow_query', 'http_request', 'jobs', 'auth', 'http_outbound'];
+    private const TYPES = ['logs', 'slow_query', 'http_request', 'jobs', 'auth', 'http_outbound', 'health_check'];
 
     public function handle(): int
     {
@@ -265,6 +265,35 @@ class ObservabilityTestCommand extends Command
                 'path'        => $path,
                 'status_code' => $status,
                 'duration_ms' => round($baseMs + mt_rand(-5, 30), 2),
+            ];
+        }, range(0, $count - 1));
+    }
+
+    private function generate_health_check(int $count, string $service, string $env): array
+    {
+        $scenarios = [
+            ['ok', 200, 'ok', 'ok', 'ok'],
+            ['ok', 200, 'ok', 'ok', 'skipped'],
+            ['fail', 503, 'fail', 'ok', 'ok'],
+            ['ok', 200, 'ok', 'ok', 'ok'],
+            ['fail', 503, 'ok', 'fail', 'ok'],
+        ];
+
+        return array_map(function ($i) use ($scenarios, $service, $env) {
+            [$status, $httpStatus, $db, $cache, $queue] = $scenarios[$i % count($scenarios)];
+
+            return [
+                '_timestamp' => $this->ts(-$i * 60),
+                'level' => $status === 'ok' ? 'info' : 'error',
+                'message' => 'health_check',
+                'service' => $service,
+                'env' => $env,
+                'status' => $status,
+                'http_status' => $httpStatus,
+                'duration_ms' => round(5 + mt_rand(0, 45), 2),
+                'check_db' => $db,
+                'check_cache' => $cache,
+                'check_queue' => $queue,
             ];
         }, range(0, $count - 1));
     }
