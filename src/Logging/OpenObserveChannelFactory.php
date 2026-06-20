@@ -1,6 +1,6 @@
 <?php
 
-namespace Gysc\Observability\Logging;
+namespace Iseldore\Observability\Logging;
 
 use Monolog\Handler\BufferHandler;
 use Monolog\Logger;

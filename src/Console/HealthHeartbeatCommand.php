@@ -1,9 +1,9 @@
 <?php
 
-namespace Gysc\Observability\Console;
+namespace Iseldore\Observability\Console;
 
-use Gysc\Observability\Http\Controllers\HealthController;
-use Gysc\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Http\Controllers\HealthController;
+use Iseldore\Observability\Support\OpenObserveClient;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Queue;
 
@@ -28,25 +28,33 @@ class HealthHeartbeatCommand extends Command
         $totalMs = round((microtime(true) - $start) * 1000, 2);
 
         $body = json_decode($response->getContent(), true);
+        // Corps toujours JSON aujourd'hui ; garde défensive si deep() renvoyait un corps inattendu.
+        $body = is_array($body) ? $body : [];
+        $status = $body['status'] ?? 'fail';
+
+        $queueSizes = $this->collectQueueSizes();
 
         $payload = [
-            '_timestamp' => (int) round(microtime(true) * 1_000_000),
-            'level' => $body['status'] === 'ok' ? 'info' : 'error',
+            '_timestamp' => (int) round(microtime(true) * 1000000),
+            'level' => $status === 'ok' ? 'info' : 'error',
             'message' => 'health_check',
             'service' => config('observability.service', 'laravel'),
             'env' => app()->environment(),
-            'status' => $body['status'],
+            'status' => $status,
             'http_status' => $response->getStatusCode(),
             'duration_ms' => $totalMs,
             'check_db' => $body['db'] ?? 'skipped',
             'check_cache' => $body['cache'] ?? 'skipped',
             'check_queue' => $body['queue'] ?? 'skipped',
-            'queue_sizes' => $this->collectQueueSizes(),
+            // Détail par queue (colonnes dynamiques queue_sizes_<nom> après aplatissement OpenObserve)
+            'queue_sizes' => $queueSizes,
+            // Total stable, requêtable et alertable (cf. dashboard "Queue backlog" + alerte queue_backlog)
+            'queue_size_total' => array_sum($queueSizes),
         ];
 
         try {
             app(OpenObserveClient::class)->ingest([$payload]);
-            $this->info("Heartbeat envoyé — status={$body['status']} ({$totalMs}ms)");
+            $this->info("Heartbeat envoyé — status={$status} ({$totalMs}ms)");
         } catch (\Throwable $e) {
             error_log('[observability] heartbeat ingest failed: '.$e->getMessage());
             $this->error('Envoi échoué : '.$e->getMessage());

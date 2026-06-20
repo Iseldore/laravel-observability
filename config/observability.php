@@ -28,7 +28,7 @@ return [
     */
 
     'openobserve' => [
-        'url' => env('OPENOBSERVE_URL', 'https://observe.iseldore.fr'),
+        'url' => env('OPENOBSERVE_URL', 'https://openobserve.example.com'),
         'org' => env('OPENOBSERVE_ORG', 'default'),
         'stream' => env('OPENOBSERVE_STREAM', 'default'),
         'user' => env('OPENOBSERVE_USER'),
@@ -163,19 +163,6 @@ return [
     | deep_throttle  : "tentatives,minutes" pour le rate-limit de /health/deep.
     */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Health heartbeat (observability:heartbeat)
-    |--------------------------------------------------------------------------
-    | schedule : expression cron ou shortcut Laravel ('everyMinute', 'everyFiveMinutes'…).
-    |            null = pas de scheduling automatique (appel manuel ou cron système).
-    */
-
-    'heartbeat' => [
-        'enabled' => env('HEALTH_HEARTBEAT_ENABLED', false),
-        'schedule' => env('HEALTH_HEARTBEAT_SCHEDULE', 'everyMinute'),
-    ],
-
     'health' => [
         'enabled' => env('OBSERVABILITY_HEALTH_ROUTES', true),
         'prefix' => env('OBSERVABILITY_HEALTH_PREFIX', ''),
@@ -187,6 +174,19 @@ return [
             'cache' => env('HEALTH_CHECK_CACHE', true),
             'queue' => env('HEALTH_CHECK_QUEUE', true),
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Health heartbeat (observability:heartbeat)
+    |--------------------------------------------------------------------------
+    | schedule : expression cron ou shortcut Laravel ('everyMinute', 'everyFiveMinutes'…).
+    |            null = pas de scheduling automatique (appel manuel ou cron système).
+    */
+
+    'heartbeat' => [
+        'enabled' => env('HEALTH_HEARTBEAT_ENABLED', false),
+        'schedule' => env('HEALTH_HEARTBEAT_SCHEDULE', 'everyMinute'),
     ],
 
 ];

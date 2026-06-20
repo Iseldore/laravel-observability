@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Scheduler;
+namespace Iseldore\Observability\Scheduler;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 
 class SchedulerLogger
 {
@@ -28,7 +28,7 @@ class SchedulerLogger
             $task = $event->task;
 
             $payload = [
-                '_timestamp' => (int) round(microtime(true) * 1_000_000),
+                '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => $level,
                 'message'    => $message,
                 'service'    => (string) ($config['service'] ?? 'laravel'),

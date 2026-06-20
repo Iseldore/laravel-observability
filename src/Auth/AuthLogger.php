@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Auth;
+namespace Iseldore\Observability\Auth;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -44,7 +44,7 @@ class AuthLogger
             }
 
             $payload = [
-                '_timestamp' => (int) round(microtime(true) * 1_000_000),
+                '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => $level,
                 'message'    => $message,
                 'service'    => (string) ($config['service'] ?? 'laravel'),

@@ -1,9 +1,9 @@
 <?php
 
-namespace Gysc\Observability\Exception;
+namespace Iseldore\Observability\Exception;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
-use Gysc\Observability\Logging\OpenObserveHandler;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\OpenObserveHandler;
 use Illuminate\Log\Events\MessageLogged;
 
 class ExceptionLogger
@@ -40,7 +40,7 @@ class ExceptionLogger
             }
 
             $payload = [
-                '_timestamp'        => (int) round(microtime(true) * 1_000_000),
+                '_timestamp'        => (int) round(microtime(true) * 1000000),
                 'level'             => $event->level,
                 'message'           => 'exception',
                 'service'           => (string) ($config['service'] ?? 'laravel'),

@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Http;
+namespace Iseldore\Observability\Http;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 
 /**
@@ -40,7 +40,7 @@ class RequestLogger
             $level = $statusCode >= 500 ? 'error' : ($statusCode >= 400 ? 'warning' : 'info');
 
             $payload = [
-                '_timestamp'  => (int) round(microtime(true) * 1_000_000),
+                '_timestamp'  => (int) round(microtime(true) * 1000000),
                 'level'       => $level,
                 'message'     => 'http_request',
                 'service'     => (string) ($config['service'] ?? 'laravel'),
@@ -56,10 +56,18 @@ class RequestLogger
 
             $payload['memory_peak_kb'] = (int) round(memory_get_peak_usage(true) / 1024);
 
-            try {
-                $payload['response_size'] = strlen($response->getContent());
-            } catch (\Throwable $ignored) {
-                // StreamedResponse n'a pas de getContent — on omet le champ.
+            // Taille de réponse : on privilégie l'en-tête Content-Length (gratuit).
+            // getContent() matérialiserait tout le corps en mémoire — coûteux sur une
+            // grosse réponse — donc on n'y recourt qu'en dernier ressort.
+            $contentLength = $response->headers->get('Content-Length');
+            if ($contentLength !== null && is_numeric($contentLength)) {
+                $payload['response_size'] = (int) $contentLength;
+            } else {
+                try {
+                    $payload['response_size'] = strlen($response->getContent());
+                } catch (\Throwable $ignored) {
+                    // StreamedResponse n'a pas de getContent — on omet le champ.
+                }
             }
 
             $route = $request->route();

@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Console;
+namespace Iseldore\Observability\Console;
 
-use Gysc\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Support\OpenObserveClient;
 use Illuminate\Console\Command;
 
 class DeployMarkerCommand extends Command
@@ -29,7 +29,7 @@ class DeployMarkerCommand extends Command
         $deployMessage = $this->option('message');
 
         $payload = [
-            '_timestamp' => (int) round(microtime(true) * 1_000_000),
+            '_timestamp' => (int) round(microtime(true) * 1000000),
             'level'      => 'info',
             'message'    => 'deploy',
             'service'    => config('observability.service', 'laravel'),

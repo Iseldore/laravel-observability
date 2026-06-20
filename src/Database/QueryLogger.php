@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Database;
+namespace Iseldore\Observability\Database;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Illuminate\Database\Events\QueryExecuted;
 
 /**
@@ -30,7 +30,7 @@ class QueryLogger
             }
 
             $payload = [
-                '_timestamp' => (int) round(microtime(true) * 1_000_000),
+                '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => 'warning',
                 'message'    => 'slow_query',
                 'service'    => (string) ($config['service'] ?? 'laravel'),

@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Cache;
+namespace Iseldore\Observability\Cache;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 
 class CacheLogger
 {
@@ -46,7 +46,7 @@ class CacheLogger
             }
 
             $payload = [
-                '_timestamp' => (int) round(microtime(true) * 1_000_000),
+                '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => 'info',
                 'message'    => 'cache_stats',
                 'service'    => (string) ($config['service'] ?? 'laravel'),

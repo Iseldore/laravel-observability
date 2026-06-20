@@ -43,7 +43,7 @@ it('/health/deep renvoie 503 quand la base est injoignable', function () {
     $this->get('/health/deep')
         ->assertStatus(503)
         ->assertJson(['status' => 'fail', 'db' => 'fail']);
-})->skip(fn () => getenv('CI') !== false, 'connexion réseau lente en CI');
+})->skip(function () { return getenv('CI') !== false; }, 'connexion réseau lente en CI');
 
 it('/health/deep ne fuite jamais de détail d’exception', function () {
     config()->set('database.default', 'broken');
@@ -57,7 +57,7 @@ it('/health/deep ne fuite jamais de détail d’exception', function () {
 
     expect($body)->not->toContain('SQLSTATE')
         ->and($body)->not->toContain('240.0.0.1');
-})->skip(fn () => getenv('CI') !== false, 'connexion réseau lente en CI');
+})->skip(function () { return getenv('CI') !== false; }, 'connexion réseau lente en CI');
 
 it('/health/deep bloque sans le bon token', function () {
     config()->set('observability.health.deep_token', 'secret');

@@ -1,20 +1,20 @@
 <?php
 
-namespace Gysc\Observability;
+namespace Iseldore\Observability;
 
-use Gysc\Observability\Auth\AuthLogger;
-use Gysc\Observability\Cache\CacheLogger;
-use Gysc\Observability\Console\DeployMarkerCommand;
-use Gysc\Observability\Console\HealthHeartbeatCommand;
-use Gysc\Observability\Console\ObservabilityTestCommand;
-use Gysc\Observability\Database\QueryLogger;
-use Gysc\Observability\Exception\ExceptionLogger;
-use Gysc\Observability\Http\Middleware\VerifyHealthToken;
-use Gysc\Observability\Http\OutboundHttpLogger;
-use Gysc\Observability\Http\RequestLogger;
-use Gysc\Observability\Logging\OpenObserveHandler;
-use Gysc\Observability\Queue\JobLogger;
-use Gysc\Observability\Scheduler\SchedulerLogger;
+use Iseldore\Observability\Auth\AuthLogger;
+use Iseldore\Observability\Cache\CacheLogger;
+use Iseldore\Observability\Console\DeployMarkerCommand;
+use Iseldore\Observability\Console\HealthHeartbeatCommand;
+use Iseldore\Observability\Console\ObservabilityTestCommand;
+use Iseldore\Observability\Database\QueryLogger;
+use Iseldore\Observability\Exception\ExceptionLogger;
+use Iseldore\Observability\Http\Middleware\VerifyHealthToken;
+use Iseldore\Observability\Http\OutboundHttpLogger;
+use Iseldore\Observability\Http\RequestLogger;
+use Iseldore\Observability\Logging\OpenObserveHandler;
+use Iseldore\Observability\Queue\JobLogger;
+use Iseldore\Observability\Scheduler\SchedulerLogger;
 use Illuminate\Auth\Events\Failed as AuthFailed;
 use Illuminate\Auth\Events\Login as AuthLogin;
 use Illuminate\Auth\Events\Logout as AuthLogout;
@@ -84,8 +84,8 @@ class ObservabilityServiceProvider extends ServiceProvider
         Route::middleware([])
             ->prefix((string) config('observability.health.prefix', ''))
             ->group(function () use ($router, $deepMiddleware) {
-                $router->get('/health', [\Gysc\Observability\Http\Controllers\HealthController::class, 'live']);
-                $router->get('/health/deep', [\Gysc\Observability\Http\Controllers\HealthController::class, 'deep'])
+                $router->get('/health', [\Iseldore\Observability\Http\Controllers\HealthController::class, 'live']);
+                $router->get('/health/deep', [\Iseldore\Observability\Http\Controllers\HealthController::class, 'deep'])
                     ->middleware($deepMiddleware);
             });
     }

@@ -1,8 +1,8 @@
 <?php
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
-use Gysc\Observability\Logging\OpenObserveChannelFactory;
-use Gysc\Observability\Logging\OpenObserveHandler;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\OpenObserveChannelFactory;
+use Iseldore\Observability\Logging\OpenObserveHandler;
 use Illuminate\Support\Facades\Queue;
 
 it('bufferise plusieurs logs et dispatche un seul job au flush', function () {
@@ -54,5 +54,5 @@ it('le flush ne lève jamais, même si le dispatch échoue', function () {
     $logger = (new OpenObserveChannelFactory())(['level' => 'debug']);
     $logger->error('boom');
 
-    expect(fn () => $logger->close())->not->toThrow(Throwable::class);
+    expect(function () use ($logger) { return $logger->close(); })->not->toThrow(Throwable::class);
 });

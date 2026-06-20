@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Tests;
+namespace Iseldore\Observability\Tests;
 
-use Gysc\Observability\ObservabilityServiceProvider;
+use Iseldore\Observability\ObservabilityServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra

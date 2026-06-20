@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Queue;
+namespace Iseldore\Observability\Queue;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobTimedOut;
@@ -50,7 +50,7 @@ class JobLogger
             }
 
             $payload = [
-                '_timestamp' => (int) round(microtime(true) * 1_000_000),
+                '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => $level,
                 'message'    => $message,
                 'service'    => (string) ($config['service'] ?? 'laravel'),

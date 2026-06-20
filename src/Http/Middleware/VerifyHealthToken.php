@@ -1,6 +1,6 @@
 <?php
 
-namespace Gysc\Observability\Http\Middleware;
+namespace Iseldore\Observability\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;

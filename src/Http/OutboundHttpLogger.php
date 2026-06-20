@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Http;
+namespace Iseldore\Observability\Http;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Illuminate\Http\Client\Events\ResponseReceived;
 
 /**
@@ -41,10 +41,12 @@ class OutboundHttpLogger
             $statusCode = $response->status();
             $level = $statusCode >= 500 ? 'error' : ($statusCode >= 400 ? 'warning' : 'info');
 
-            $transferTime = $response->transferStats?->getTransferTime();
+            // Pas d'opérateur nullsafe (?->) : indisponible en PHP 7.x.
+            $transferStats = $response->transferStats;
+            $transferTime = $transferStats ? $transferStats->getTransferTime() : null;
 
             $payload = [
-                '_timestamp'  => (int) round(microtime(true) * 1_000_000),
+                '_timestamp'  => (int) round(microtime(true) * 1000000),
                 'level'       => $level,
                 'message'     => 'http_outbound',
                 'service'     => (string) ($config['service'] ?? 'laravel'),

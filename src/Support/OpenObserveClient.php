@@ -1,6 +1,6 @@
 <?php
 
-namespace Gysc\Observability\Support;
+namespace Iseldore\Observability\Support;
 
 use Illuminate\Support\Facades\Http;
 
@@ -34,7 +34,7 @@ class OpenObserveClient
             ->asJson();
 
         // connectTimeout() n'existe qu'à partir de Laravel 9 — appel conditionnel
-        // pour rester compatible Laravel 8 (Marlenka).
+        // pour rester compatible Laravel 8.
         if (method_exists($request, 'connectTimeout')) {
             $request = $request->connectTimeout((float) $config['connect_timeout']);
         }

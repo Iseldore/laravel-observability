@@ -1,6 +1,6 @@
 <?php
 
-use Gysc\Observability\Logging\RecordNormalizer;
+use Iseldore\Observability\Logging\RecordNormalizer;
 
 it('normalise un record Monolog 2 (array)', function () {
     $record = [
@@ -19,7 +19,11 @@ it('normalise un record Monolog 2 (array)', function () {
         ->and($out['service'])->toBe('svc')
         ->and($out['env'])->toBe('testing')
         ->and($out['request_id'])->toBe('abc-123')
-        ->and($out['context'])->toBe(['foo' => 'bar'])
+        // context aplati en colonnes préfixées context_<clé>
+        ->and($out['context_foo'])->toBe('bar')
+        ->and($out)->not->toHaveKey('context')
+        // request_id promu au premier niveau et retiré de extra (pas de doublon extra_request_id)
+        ->and($out)->not->toHaveKey('extra_request_id')
         ->and($out['_timestamp'])->toBeInt();
 });
 
@@ -28,13 +32,16 @@ it('normalise un record Monolog 3 (LogRecord) si disponible', function () {
         $this->markTestSkipped('Monolog 2 : LogRecord absent');
     }
 
+    // Arguments positionnels (datetime, channel, level, message, context, extra) :
+    // pas d'arguments nommés, pour que ce fichier parse aussi sous PHP 7.x.
+    // Ce bloc ne s'exécute que si Monolog 3 est présent (cf. class_exists ci-dessus).
     $record = new \Monolog\LogRecord(
-        datetime: new \Monolog\DateTimeImmutable(true),
-        channel: 'test',
-        level: \Monolog\Level::Warning,
-        message: 'warn',
-        context: ['k' => 'v'],
-        extra: ['request_id' => 'xyz'],
+        new \Monolog\DateTimeImmutable(true),
+        'test',
+        \Monolog\Level::Warning,
+        'warn',
+        ['k' => 'v'],
+        ['request_id' => 'xyz'],
     );
 
     $out = RecordNormalizer::toArray($record, 'svc', 'testing');
@@ -42,7 +49,28 @@ it('normalise un record Monolog 3 (LogRecord) si disponible', function () {
     expect($out['level'])->toBe('warning')
         ->and($out['message'])->toBe('warn')
         ->and($out['request_id'])->toBe('xyz')
-        ->and($out['context'])->toBe(['k' => 'v']);
+        ->and($out['context_k'])->toBe('v')
+        ->and($out)->not->toHaveKey('context');
+});
+
+it('aplatit les sous-tableaux de context en une seule colonne JSON string (schéma stable)', function () {
+    $record = [
+        'message' => 'm',
+        'level' => 200,
+        'level_name' => 'INFO',
+        'datetime' => new DateTimeImmutable(),
+        'context' => [
+            'user_id' => 42,                       // scalaire → colonne typée
+            'roles' => ['admin', 'editor'],        // tableau → une seule colonne texte JSON
+        ],
+        'extra' => [],
+    ];
+
+    $out = RecordNormalizer::toArray($record, 'svc', 'testing');
+
+    expect($out['context_user_id'])->toBe(42)
+        ->and($out['context_roles'])->toBe('["admin","editor"]')
+        ->and($out)->not->toHaveKey('context_roles_0'); // pas d'explosion de colonnes
 });
 
 it('rend le payload JSON-sérialisable même avec des valeurs exotiques', function () {
@@ -58,5 +86,5 @@ it('rend le payload JSON-sérialisable même avec des valeurs exotiques', functi
     $out = RecordNormalizer::toArray($record, 'svc', 'testing');
 
     expect(json_encode($out))->toBeString()
-        ->and($out['context']['res'])->toBeString();
+        ->and($out['context_res'])->toBeString();
 });

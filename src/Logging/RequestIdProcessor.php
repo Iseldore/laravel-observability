@@ -1,6 +1,6 @@
 <?php
 
-namespace Gysc\Observability\Logging;
+namespace Iseldore\Observability\Logging;
 
 /**
  * Injecte un identifiant de requête (`request_id`) dans `extra` de chaque record.
@@ -27,11 +27,14 @@ class RequestIdProcessor
             return $record;
         }
 
-        // Monolog 3.x — LogRecord est immuable : `with()` renvoie une nouvelle instance.
+        // Monolog 3.x — LogRecord : la propriété `extra` est mutable (non readonly),
+        // on l'affecte directement. On évite `with(extra: ...)` (argument nommé) qui
+        // empêcherait le simple parse du fichier sous PHP 7.x.
         $extra = $record->extra;
         $extra['request_id'] = $requestId;
+        $record->extra = $extra;
 
-        return $record->with(extra: $extra);
+        return $record;
     }
 
     /**

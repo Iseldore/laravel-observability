@@ -15,7 +15,7 @@ php artisan vendor:publish --tag=observability-config
 
 ```env
 OPENOBSERVE_ENABLED=true              # false en local/test
-OPENOBSERVE_URL=https://observe.iseldore.fr
+OPENOBSERVE_URL=https://openobserve.example.com
 OPENOBSERVE_ORG=default
 OPENOBSERVE_STREAM=mon-app            # un stream par application
 OPENOBSERVE_USER=...                  # token user OpenObserve
@@ -39,7 +39,7 @@ Ajouter le channel `openobserve` dans `config/logging.php` et le placer en tête
 
     'openobserve' => [
         'driver' => 'custom',
-        'via' => \Gysc\Observability\Logging\OpenObserveChannelFactory::class,
+        'via' => \Iseldore\Observability\Logging\OpenObserveChannelFactory::class,
         'level' => env('LOG_LEVEL', 'debug'),
     ],
 ],
@@ -47,6 +47,11 @@ Ajouter le channel `openobserve` dans `config/logging.php` et le placer en tête
 
 Les logs sont bufferisés par requête puis envoyés via un job en queue. Si OpenObserve est injoignable,
 l'envoi échoue silencieusement — l'application n'est jamais impactée.
+
+Chaque log porte un champ `request_id` (repris de l'en-tête `X-Request-Id` ou `X-Amzn-Trace-Id`,
+sinon un UUID v4 généré) pour corréler tous les logs d'une même requête. Les clés de `context` /
+`extra` sont aplaties en colonnes préfixées (`context_<clé>`, `extra_<clé>`) ; tout sous-tableau ou
+objet est sérialisé en une seule colonne JSON pour garder un schéma OpenObserve stable.
 
 ## Health
 
@@ -72,6 +77,23 @@ Chaque listener est activable individuellement via `.env`. Tous sont fail-silent
 | `SCHEDULER_LOG=true` | `scheduled_task_finished` / `scheduled_task_failed` | task, expression, duration_s, exit_code |
 | `EXCEPTION_LOG=true` | `exception` | exception_class, file, line, trace (5 frames) |
 | `CACHE_LOG=true` | `cache_stats` | hits, misses, hit_ratio (agrégé par requête) |
+
+### Performance
+
+L'envoi vers OpenObserve est **toujours déporté en queue** (`SendLogsToOpenObserve`, fail-silent) :
+le cycle requête n'est jamais bloqué par le réseau. Le package suppose donc une **queue
+asynchrone** (redis, sqs, database) — avec `QUEUE_CONNECTION=sync` (dev local), l'envoi
+redevient synchrone et bloquant.
+
+Coûts à connaître :
+
+- `CACHE_LOG` écoute **chaque** hit/miss de cache : son overhead (un compteur incrémenté en
+  mémoire, agrégé en un seul payload par requête) est proportionnel au volume d'accès cache.
+  À réserver aux apps où cette métrique a de la valeur.
+- `SLOW_QUERY_LOG` filtre sur le seuil **avant** toute allocation : une requête sous le seuil
+  ne coûte quasiment rien.
+- `REQUEST_LOG` lit la taille de réponse via l'en-tête `Content-Length` quand il est présent,
+  pour éviter de matérialiser le corps en mémoire.
 
 ### Slow queries
 

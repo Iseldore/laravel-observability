@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Console;
+namespace Iseldore\Observability\Console;
 
-use Gysc\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Support\OpenObserveClient;
 use Illuminate\Console\Command;
 
 /**
@@ -19,7 +19,7 @@ class ObservabilityTestCommand extends Command
 {
     protected $signature = 'observability:test
                             {--count=3 : Nombre d\'envois par type de métrique}
-                            {--type=* : Types à envoyer (logs,slow_query,http_request,jobs,auth,http_outbound). Tous si omis.}
+                            {--type=* : Types à envoyer (logs,slow_query,http_request,jobs,auth,http_outbound,health_check,deploy,scheduled_task,exception,cache_stats). Tous si omis.}
                             {--dry-run : Affiche les payloads sans les envoyer}';
 
     protected $description = 'Envoie des données de test vers OpenObserve pour valider la config et peupler les dashboards';
@@ -106,14 +106,16 @@ class ObservabilityTestCommand extends Command
             'Database connection pool exhausted',
         ];
 
-        return array_map(fn($i) => [
-            '_timestamp' => $this->ts(-$i * 30),
-            'level'      => $levels[$i % count($levels)],
-            'message'    => $messages[$i % count($messages)],
-            'service'    => $service,
-            'env'        => $env,
-            'context'    => ['test' => true, 'iteration' => $i + 1],
-        ], range(0, $count - 1));
+        return array_map(function ($i) use ($levels, $messages, $service, $env) {
+            return [
+                '_timestamp' => $this->ts(-$i * 30),
+                'level'      => $levels[$i % count($levels)],
+                'message'    => $messages[$i % count($messages)],
+                'service'    => $service,
+                'env'        => $env,
+                'context'    => ['test' => true, 'iteration' => $i + 1],
+            ];
+        }, range(0, $count - 1));
     }
 
     private function generate_slow_query(int $count, string $service, string $env): array
@@ -125,16 +127,18 @@ class ObservabilityTestCommand extends Command
             'SELECT COUNT(*) FROM logs WHERE created_at BETWEEN ? AND ? AND level = ?',
         ];
 
-        return array_map(fn($i) => [
-            '_timestamp'  => $this->ts(-$i * 45),
-            'level'       => 'warning',
-            'message'     => 'slow_query',
-            'service'     => $service,
-            'env'         => $env,
-            'duration_ms' => round(500 + ($i + 1) * 250 + mt_rand(0, 100), 2),
-            'sql'         => $queries[$i % count($queries)],
-            'connection'  => 'mysql',
-        ], range(0, $count - 1));
+        return array_map(function ($i) use ($queries, $service, $env) {
+            return [
+                '_timestamp'  => $this->ts(-$i * 45),
+                'level'       => 'warning',
+                'message'     => 'slow_query',
+                'service'     => $service,
+                'env'         => $env,
+                'duration_ms' => round(500 + ($i + 1) * 250 + mt_rand(0, 100), 2),
+                'sql'         => $queries[$i % count($queries)],
+                'connection'  => 'mysql',
+            ];
+        }, range(0, $count - 1));
     }
 
     private function generate_http_request(int $count, string $service, string $env): array
@@ -146,7 +150,7 @@ class ObservabilityTestCommand extends Command
             ['GET',  '/api/reports/monthly',    200, 950],
             ['PUT',  '/api/users/42',           422, 35],
             ['GET',  '/api/branches',           200, 210],
-            ['POST', '/api/webhooks/onedev',    500, 55],
+            ['POST', '/api/webhooks/incoming',  500, 55],
         ];
 
         return array_map(function ($i) use ($routes, $service, $env) {
@@ -164,6 +168,8 @@ class ObservabilityTestCommand extends Command
                 'path'        => $path,
                 'status_code' => $status_code,
                 'duration_ms' => round($baseMs + mt_rand(-10, 50), 2),
+                'memory_peak_kb' => mt_rand(8000, 65000),
+                'response_size' => mt_rand(200, 150000),
             ];
         }, range(0, $count - 1));
     }
@@ -207,11 +213,11 @@ class ObservabilityTestCommand extends Command
     private function generate_auth(int $count, string $service, string $env): array
     {
         $events = [
-            ['auth_login',  'info',    'thomas@gysc.fr',  42],
-            ['auth_login',  'info',    'alice@gysc.fr',   17],
+            ['auth_login',  'info',    'thomas@example.com',  42],
+            ['auth_login',  'info',    'alice@example.com',   17],
             ['auth_failed', 'warning', 'unknown@test.com', null],
-            ['auth_logout', 'info',    'thomas@gysc.fr',  42],
-            ['auth_failed', 'warning', 'admin@gysc.fr',   null],
+            ['auth_logout', 'info',    'thomas@example.com',  42],
+            ['auth_failed', 'warning', 'admin@example.com',   null],
         ];
 
         return array_map(function ($i) use ($events, $service, $env) {
@@ -242,12 +248,12 @@ class ObservabilityTestCommand extends Command
     private function generate_http_outbound(int $count, string $service, string $env): array
     {
         $calls = [
-            ['POST', 'onedev.gysc.fr',              '/api/issue/comments',       201,  85],
+            ['POST', 'api.example.com',              '/api/issue/comments',       201,  85],
             ['GET',  'api.anthropic.com',            '/v1/messages',              200, 1240],
             ['GET',  's3.eu-west-3.amazonaws.com',   '/bucket/file.json',         200,  32],
             ['POST', 'hooks.slack.com',              '/services/T00/B00/xxx',     200,  95],
             ['GET',  'api.anthropic.com',            '/v1/messages',              429,  12],
-            ['POST', 'onedev.gysc.fr',              '/api/issue/comments',       500, 210],
+            ['POST', 'api.example.com',              '/api/issue/comments',       500, 210],
         ];
 
         return array_map(function ($i) use ($calls, $service, $env) {
@@ -282,6 +288,8 @@ class ObservabilityTestCommand extends Command
         return array_map(function ($i) use ($scenarios, $service, $env) {
             [$status, $httpStatus, $db, $cache, $queue] = $scenarios[$i % count($scenarios)];
 
+            $queueSizes = ['default' => mt_rand(0, 30), 'notifications' => mt_rand(0, 10)];
+
             return [
                 '_timestamp' => $this->ts(-$i * 60),
                 'level' => $status === 'ok' ? 'info' : 'error',
@@ -294,6 +302,8 @@ class ObservabilityTestCommand extends Command
                 'check_db' => $db,
                 'check_cache' => $cache,
                 'check_queue' => $queue,
+                'queue_sizes' => $queueSizes,
+                'queue_size_total' => array_sum($queueSizes),
             ];
         }, range(0, $count - 1));
     }
@@ -428,6 +438,6 @@ class ObservabilityTestCommand extends Command
 
     private function ts(int $offsetSeconds = 0): int
     {
-        return (int) round((microtime(true) + $offsetSeconds) * 1_000_000);
+        return (int) round((microtime(true) + $offsetSeconds) * 1000000);
     }
 }

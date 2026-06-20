@@ -1,8 +1,8 @@
 <?php
 
-namespace Gysc\Observability\Logging;
+namespace Iseldore\Observability\Logging;
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Monolog\Handler\AbstractProcessingHandler;
 
 /**
@@ -22,11 +22,13 @@ class OpenObserveHandler extends AbstractProcessingHandler
      * durant cette fenêtre est ignoré par CE handler (il continue vers les autres
      * channels du stack), évitant une boucle de logs → jobs → logs.
      */
-    public static bool $sending = false;
+    public static $sending = false;
 
-    private string $service;
+    /** @var string */
+    private $service;
 
-    private string $env;
+    /** @var string */
+    private $env;
 
     public function __construct(string $service, string $env, $level = 100, bool $bubble = true)
     {

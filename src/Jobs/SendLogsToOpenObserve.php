@@ -1,9 +1,9 @@
 <?php
 
-namespace Gysc\Observability\Jobs;
+namespace Iseldore\Observability\Jobs;
 
-use Gysc\Observability\Logging\OpenObserveHandler;
-use Gysc\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Logging\OpenObserveHandler;
+use Iseldore\Observability\Support\OpenObserveClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,16 +24,25 @@ class SendLogsToOpenObserve implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
 
-    public int $tries = 1;
+    /** @var int */
+    public $tries = 1;
 
-    /** Pas de retry : un log perdu est acceptable, un job qui s'empile ne l'est pas. */
-    public int $timeout = 10;
+    /**
+     * Pas de retry : un log perdu est acceptable, un job qui s'empile ne l'est pas.
+     *
+     * @var int
+     */
+    public $timeout = 10;
+
+    /** @var array<int, array<string, mixed>> */
+    public $batch;
 
     /**
      * @param  array<int, array<string, mixed>>  $batch
      */
-    public function __construct(public array $batch)
+    public function __construct(array $batch)
     {
+        $this->batch = $batch;
     }
 
     /**

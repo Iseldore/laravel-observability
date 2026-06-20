@@ -1,3 +1,3 @@
 <?php
 
-uses(Gysc\Observability\Tests\TestCase::class)->in(__DIR__);
+uses(Iseldore\Observability\Tests\TestCase::class)->in(__DIR__);

@@ -1,7 +1,7 @@
 <?php
 
-use Gysc\Observability\Jobs\SendLogsToOpenObserve;
-use Gysc\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Support\OpenObserveClient;
 use Illuminate\Support\Facades\Http;
 
 it('envoie le batch sur l’endpoint _json du stream configuré', function () {
@@ -32,7 +32,7 @@ it('reste silencieux quand l’envoi lève une exception', function () {
         };
     });
 
-    expect(fn () => (new SendLogsToOpenObserve([['message' => 'a']]))->handle())
+    expect(function () { return (new SendLogsToOpenObserve([['message' => 'a']]))->handle(); })
         ->not->toThrow(Throwable::class);
 });
 
@@ -49,7 +49,7 @@ it('relâche la garde anti-récursion même après un échec d’envoi', functio
 
     (new SendLogsToOpenObserve([['message' => 'a']]))->handle();
 
-    expect(\Gysc\Observability\Logging\OpenObserveHandler::$sending)->toBeFalse();
+    expect(\Iseldore\Observability\Logging\OpenObserveHandler::$sending)->toBeFalse();
 });
 
 it('n’appelle pas le client si désactivé', function () {
@@ -59,8 +59,12 @@ it('n’appelle pas le client si désactivé', function () {
     $this->app->bind(OpenObserveClient::class, function () use (&$called) {
         return new class($called) extends OpenObserveClient
         {
-            public function __construct(public &$flag)
+            /** @var bool */
+            public $flag;
+
+            public function __construct(&$flag)
             {
+                $this->flag = &$flag;
             }
 
             public function ingest(array $batch): void

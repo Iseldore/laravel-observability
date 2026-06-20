@@ -18,18 +18,18 @@
     },
     "autoload": {
         "psr-4": {
-            "Gysc\\Observability\\": "src/"
+            "Iseldore\\Observability\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Gysc\\Observability\\Tests\\": "tests/"
+            "Iseldore\\Observability\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Gysc\\Observability\\ObservabilityServiceProvider"
+                "Iseldore\\Observability\\ObservabilityServiceProvider"
             ]
         }
     },
