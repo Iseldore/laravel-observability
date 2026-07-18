@@ -53,6 +53,30 @@ it('normalise un record Monolog 3 (LogRecord) si disponible', function () {
         ->and($out)->not->toHaveKey('context');
 });
 
+it('promeut user_id et user_email de extra au premier niveau (comme request_id)', function () {
+    $record = [
+        'message' => 'échec sync stock',
+        'level' => 400,
+        'level_name' => 'ERROR',
+        'datetime' => new DateTimeImmutable(),
+        // Posés par ContextProcessor dans extra.
+        'extra' => ['request_id' => 'req-1', 'user_id' => 42, 'user_email' => 'client@example.com'],
+        'context' => ['order_id' => 7],
+    ];
+
+    $out = RecordNormalizer::toArray($record, 'lemonpie', 'production');
+
+    expect($out['user_id'])->toBe(42)
+        ->and($out['user_email'])->toBe('client@example.com')
+        ->and($out['request_id'])->toBe('req-1')
+        // context métier toujours aplati sous context_*
+        ->and($out['context_order_id'])->toBe(7)
+        // pas de doublon extra_user_id / extra_user_email / extra_request_id
+        ->and($out)->not->toHaveKey('extra_user_id')
+        ->and($out)->not->toHaveKey('extra_user_email')
+        ->and($out)->not->toHaveKey('extra_request_id');
+});
+
 it('aplatit les sous-tableaux de context en une seule colonne JSON string (schéma stable)', function () {
     $record = [
         'message' => 'm',

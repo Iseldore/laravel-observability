@@ -45,11 +45,14 @@ class RecordNormalizer
             'env' => $env,
         ];
 
-        // request_id remonté par RequestIdProcessor (dans extra), promu au premier niveau.
-        // Retiré de $extra pour éviter une colonne extra_request_id en doublon.
-        if (isset($extra['request_id'])) {
-            $payload['request_id'] = $extra['request_id'];
-            unset($extra['request_id']);
+        // Champs de corrélation posés par les processors (dans extra), promus au premier
+        // niveau pour être requêtables directement (WHERE request_id = … / user_id = …) et
+        // retirés de $extra pour éviter les colonnes extra_* en doublon.
+        foreach (['request_id', 'user_id', 'user_email'] as $promoted) {
+            if (isset($extra[$promoted])) {
+                $payload[$promoted] = $extra[$promoted];
+                unset($extra[$promoted]);
+            }
         }
 
         if (! empty($context)) {

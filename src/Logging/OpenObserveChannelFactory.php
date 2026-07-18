@@ -36,7 +36,24 @@ class OpenObserveChannelFactory
             true                 // flushOnOverflow : protège la mémoire (worker Octane long-vécu)
         );
 
-        return new Logger('openobserve', [$buffer], [new RequestIdProcessor()]);
+        return new Logger('openobserve', [$buffer], [
+            new RequestIdProcessor(),
+            new ContextProcessor($this->resolveContextResolver()),
+        ]);
+    }
+
+    /**
+     * Résolveur de contexte applicatif injecté sur chaque record. `null` → défaut du
+     * ContextProcessor (`auth()->user()`). Une app avec un modèle User atypique ou un
+     * tenant peut fournir son propre callable via `observability.context.resolver`.
+     *
+     * @return callable|null
+     */
+    private function resolveContextResolver(): ?callable
+    {
+        $resolver = config('observability.context.resolver');
+
+        return is_callable($resolver) ? $resolver : null;
     }
 
     /**

@@ -40,6 +40,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Contexte applicatif injecté sur chaque log
+    |--------------------------------------------------------------------------
+    | ContextProcessor ajoute automatiquement user_id / user_email (et tout ce que
+    | renvoie le résolveur) sur CHAQUE record, y compris les Log:: manuels — sans
+    | toucher au code métier. Indispensable au support (« le client X a eu une erreur »).
+    |
+    | resolver : callable () => array<string, scalaire|null> résolu à chaque record.
+    |            null = défaut (auth()->user() : user_id + user_email).
+    |            Fournir le sien pour un modèle User atypique ou un identifiant tenant, ex :
+    |
+    |            'resolver' => function () {
+    |                $u = auth()->user();
+    |                return $u ? ['user_id' => $u->id, 'tenant_id' => $u->company_id] : [];
+    |            },
+    |
+    | Le résolveur ne doit renvoyer que des scalaires (un objet/tableau ferait exploser
+    | le schéma OpenObserve). Il ne doit jamais lever : toute exception est avalée.
+    */
+
+    'context' => [
+        'resolver' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Logs
     |--------------------------------------------------------------------------
     */
