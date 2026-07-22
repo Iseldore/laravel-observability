@@ -18,7 +18,9 @@ function makeRecord(array $extra = []): array
 }
 
 it('injecte le contexte du résolveur dans extra (Monolog 2)', function () {
-    $processor = new ContextProcessor(fn () => ['user_id' => 42, 'tenant_id' => 7]);
+    $processor = new ContextProcessor(function () {
+        return ['user_id' => 42, 'tenant_id' => 7];
+    });
 
     $out = $processor(makeRecord());
 
@@ -27,7 +29,9 @@ it('injecte le contexte du résolveur dans extra (Monolog 2)', function () {
 });
 
 it('ne surcharge jamais une clé extra déjà posée par l\'appelant', function () {
-    $processor = new ContextProcessor(fn () => ['user_id' => 42]);
+    $processor = new ContextProcessor(function () {
+        return ['user_id' => 42];
+    });
 
     // request_id déjà posé par RequestIdProcessor en amont ; user_id déjà présent.
     $out = $processor(makeRecord(['request_id' => 'req-1', 'user_id' => 99]));
@@ -47,11 +51,13 @@ it('ne lève jamais et n\'ajoute rien si le résolveur échoue', function () {
 });
 
 it('ignore les valeurs non scalaires renvoyées par le résolveur', function () {
-    $processor = new ContextProcessor(fn () => [
-        'user_id' => 42,
-        'roles' => ['admin'],            // tableau → écarté (schéma OpenObserve)
-        'model' => new stdClass(),       // objet → écarté
-    ]);
+    $processor = new ContextProcessor(function () {
+        return [
+            'user_id' => 42,
+            'roles' => ['admin'],            // tableau → écarté (schéma OpenObserve)
+            'model' => new stdClass(),       // objet → écarté
+        ];
+    });
 
     $out = $processor(makeRecord());
 
@@ -61,7 +67,9 @@ it('ignore les valeurs non scalaires renvoyées par le résolveur', function () 
 });
 
 it('laisse le record intact si le résolveur ne renvoie rien', function () {
-    $processor = new ContextProcessor(fn () => []);
+    $processor = new ContextProcessor(function () {
+        return [];
+    });
 
     $out = $processor(makeRecord(['request_id' => 'req-1']));
 
@@ -73,7 +81,9 @@ it('injecte le contexte dans un LogRecord Monolog 3 si disponible', function () 
         $this->markTestSkipped('Monolog 2 : LogRecord absent');
     }
 
-    $processor = new ContextProcessor(fn () => ['user_id' => 42]);
+    $processor = new ContextProcessor(function () {
+        return ['user_id' => 42];
+    });
 
     $record = new \Monolog\LogRecord(
         new \Monolog\DateTimeImmutable(true),

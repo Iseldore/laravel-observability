@@ -22,5 +22,6 @@ abstract class TestCase extends Orchestra
         $config->set('observability.health.deep_token', null);
         // Pas de throttle en test (évite la dépendance cache/rate-limiter).
         $config->set('observability.health.deep_throttle', null);
+        $config->set('observability.request_log.enabled', true);
     }
 }

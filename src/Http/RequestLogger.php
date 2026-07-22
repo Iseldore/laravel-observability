@@ -3,6 +3,8 @@
 namespace Iseldore\Observability\Http;
 
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\ContextProcessor;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 
 /**
@@ -33,8 +35,11 @@ class RequestLogger
                 return;
             }
 
-            $startTime = defined('LARAVEL_START') ? LARAVEL_START : null;
-            $durationMs = $startTime ? round((microtime(true) - $startTime) * 1000, 2) : null;
+            // Timer posé au plus tôt dans le cycle de requête courante (cf. RequestId::markStart) —
+            // remplace LARAVEL_START, figé au boot du worker et donc invalide sous Octane dès la
+            // deuxième requête traitée par le même process.
+            $startTime = RequestId::startTime();
+            $durationMs = $startTime !== null ? round((microtime(true) - $startTime) * 1000, 2) : null;
 
             $statusCode = $response->getStatusCode();
             $level = $statusCode >= 500 ? 'error' : ($statusCode >= 400 ? 'warning' : 'info');
@@ -48,11 +53,16 @@ class RequestLogger
                 'method'      => $request->method(),
                 'path'        => '/'.ltrim($path, '/'),
                 'status_code' => $statusCode,
+                'request_id'  => RequestId::resolve(),
             ];
 
             if ($durationMs !== null) {
                 $payload['duration_ms'] = $durationMs;
             }
+
+            // Contexte applicatif (user_id/user_email…) : parité avec ContextProcessor sur le
+            // chemin Monolog. Ne surcharge jamais une clé déjà posée par ce payload.
+            $payload += ContextProcessor::resolveConfigured();
 
             $payload['memory_peak_kb'] = (int) round(memory_get_peak_usage(true) / 1024);
 

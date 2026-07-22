@@ -15,6 +15,7 @@ use Iseldore\Observability\Http\RequestLogger;
 use Iseldore\Observability\Logging\OpenObserveHandler;
 use Iseldore\Observability\Queue\JobLogger;
 use Iseldore\Observability\Scheduler\SchedulerLogger;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Auth\Events\Failed as AuthFailed;
 use Illuminate\Auth\Events\Login as AuthLogin;
 use Illuminate\Auth\Events\Logout as AuthLogout;
@@ -61,7 +62,9 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->registerSchedulerLogger();
         $this->registerExceptionLogger();
         $this->registerCacheLogger();
+        $this->registerOctaneRequestStart();
         $this->registerOctaneFlush();
+        $this->registerRequestIdFlush();
     }
 
     /**
@@ -119,6 +122,22 @@ class ObservabilityServiceProvider extends ServiceProvider
         }
 
         $this->app['events']->listen(RequestHandled::class, RequestLogger::class);
+    }
+
+    /**
+     * Nettoie les bindings scope-requête (request_id + timestamp de départ) en fin de
+     * requête, y compris hors Octane : un process qui traite plusieurs requêtes handled
+     * (ex. tests Pest qui simulent plusieurs requêtes successives dans le même process, ou
+     * tout autre contexte où le container persiste entre deux `RequestHandled`) ne doit
+     * jamais faire fuiter le request_id/timer de l'une vers l'autre. Indépendant de
+     * `request_log.enabled` : RequestIdProcessor (Monolog) et OutboundHttpLogger utilisent
+     * aussi ce binding et doivent bénéficier du même nettoyage.
+     */
+    private function registerRequestIdFlush(): void
+    {
+        $this->app['events']->listen(RequestHandled::class, function () {
+            RequestId::flush();
+        });
     }
 
     private function registerJobLogger(): void
@@ -212,11 +231,35 @@ class ObservabilityServiceProvider extends ServiceProvider
     }
 
     /**
+     * Sous Octane, le worker traite des centaines/milliers de requêtes sans jamais
+     * réexécuter `public/index.php` : `LARAVEL_START` reste figée au boot du worker et ne
+     * peut donc pas servir de départ pour `duration_ms` au-delà de la première requête.
+     *
+     * `RequestReceived` est déclenché par Octane au tout début de CHAQUE requête traitée
+     * par le worker — on y pose le timestamp de départ dans un binding scope-requête
+     * (`RequestId::markStart()`), lu ensuite par `RequestLogger` via `RequestId::startTime()`.
+     * Hors Octane, ce binding n'est jamais posé et `RequestLogger` retombe sur
+     * `LARAVEL_START` (correct : une seule requête par process) — coût nul, aucun
+     * middleware à ajouter à la pile globale.
+     *
+     * Classe d'événement Octane non chargée si le package n'est pas installé → abonnement
+     * défensif par nom de classe (string), sans dépendance dure.
+     */
+    private function registerOctaneRequestStart(): void
+    {
+        $this->app['events']->listen('Laravel\Octane\Events\RequestReceived', function () {
+            RequestId::markStart();
+        });
+    }
+
+    /**
      * Sous Octane, le worker (et donc le BufferHandler du channel openobserve) persiste
      * entre requêtes. Sans flush explicite, les logs d'une requête fuient dans le batch
      * de la suivante — ou ne partent jamais (__destruct jamais appelé).
      *
-     * On flush et on vide le buffer à la terminaison de chaque requête/tâche Octane.
+     * On flush et on vide le buffer à la terminaison de chaque requête/tâche Octane, et on
+     * réinitialise les bindings scope-requête de `RequestId` (request_id + timestamp de
+     * départ) pour qu'ils ne fuient jamais vers la requête suivante traitée par le worker.
      * Les classes d'événements Octane n'existent que si octane est installé → on s'abonne
      * de façon défensive par nom de classe (string), sans dépendance dure.
      */
@@ -226,6 +269,7 @@ class ObservabilityServiceProvider extends ServiceProvider
 
         $flush = function () {
             $this->flushOpenObserveChannel();
+            RequestId::flush();
         };
 
         foreach ([

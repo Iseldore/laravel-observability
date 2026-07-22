@@ -3,6 +3,8 @@
 namespace Iseldore\Observability\Http;
 
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\ContextProcessor;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Http\Client\Events\ResponseReceived;
 
 /**
@@ -55,11 +57,16 @@ class OutboundHttpLogger
                 'host'        => $host,
                 'path'        => $path,
                 'status_code' => $statusCode,
+                'request_id'  => RequestId::resolve(),
             ];
 
             if ($transferTime !== null) {
                 $payload['duration_ms'] = round($transferTime * 1000, 2);
             }
+
+            // Contexte applicatif (user_id/user_email…) : parité avec ContextProcessor sur le
+            // chemin Monolog. Ne surcharge jamais une clé déjà posée par ce payload.
+            $payload += ContextProcessor::resolveConfigured();
 
             SendLogsToOpenObserve::dispatchSafe([$payload]);
         } catch (\Throwable $e) {

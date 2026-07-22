@@ -75,20 +75,51 @@ class ContextProcessor
             return [];
         }
 
+        return self::onlyScalars($raw);
+    }
+
+    /**
+     * Filtre un tableau brut pour ne garder que des paires clé/scalaire, en avalant tout
+     * type non conforme — un objet/tableau ferait exploser le schéma OpenObserve (cf.
+     * RecordNormalizer). Partagée avec les appelants hors Monolog (`RequestLogger`,
+     * `OutboundHttpLogger`) qui résolvent le même contexte applicatif.
+     *
+     * @param  mixed  $raw
+     * @return array<string, scalar|null>
+     */
+    public static function onlyScalars($raw): array
+    {
         if (! is_array($raw)) {
             return [];
         }
 
         $clean = [];
         foreach ($raw as $key => $value) {
-            // Seuls les scalaires : un objet/tableau ici ferait exploser le schéma OpenObserve
-            // (cf. RecordNormalizer). L'appelant qui veut du composite passe par `context`.
             if (is_scalar($value) || $value === null) {
                 $clean[(string) $key] = $value;
             }
         }
 
         return $clean;
+    }
+
+    /**
+     * Résout le contexte configuré (`observability.context.resolver` ?? défaut) sans jamais
+     * lever, pour les appelants hors Monolog. Retourne un tableau de scalaires uniquement.
+     *
+     * @return array<string, scalar|null>
+     */
+    public static function resolveConfigured(): array
+    {
+        $resolver = config('observability.context.resolver') ?? [self::class, 'defaultContext'];
+
+        try {
+            $raw = $resolver();
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return self::onlyScalars($raw);
     }
 
     /**
