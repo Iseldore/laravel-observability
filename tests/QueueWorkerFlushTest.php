@@ -49,6 +49,10 @@ it('flush le channel openobserve quand un job échoue (JobFailed)', function () 
 });
 
 it('flush le channel openobserve quand un job time out (JobTimedOut)', function () {
+    if (! class_exists(JobTimedOut::class)) {
+        test()->markTestSkipped('JobTimedOut n\'existe pas avant Laravel 9.');
+    }
+
     Queue::fake();
 
     Log::channel('openobserve')->error('log avant timeout');
