@@ -23,5 +23,14 @@ abstract class TestCase extends Orchestra
         // Pas de throttle en test (évite la dépendance cache/rate-limiter).
         $config->set('observability.health.deep_throttle', null);
         $config->set('observability.request_log.enabled', true);
+
+        // Le package ne s'auto-enregistre pas dans logging.channels (fait côté app
+        // consommatrice) : on le déclare ici pour que Log::channel('openobserve') résolve
+        // réellement OpenObserveChannelFactory dans les tests, comme en conditions réelles.
+        $config->set('logging.channels.openobserve', [
+            'driver' => 'custom',
+            'via' => \Iseldore\Observability\Logging\OpenObserveChannelFactory::class,
+            'level' => 'debug',
+        ]);
     }
 }

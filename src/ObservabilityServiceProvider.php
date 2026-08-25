@@ -64,6 +64,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->registerCacheLogger();
         $this->registerOctaneRequestStart();
         $this->registerOctaneFlush();
+        $this->registerQueueWorkerFlush();
         $this->registerRequestIdFlush();
     }
 
@@ -279,6 +280,31 @@ class ObservabilityServiceProvider extends ServiceProvider
         ] as $event) {
             $events->listen($event, $flush);
         }
+    }
+
+    /**
+     * Un worker de queue (`queue:work`/`horizon`) persiste entre jobs comme Octane persiste
+     * entre requêtes, mais n'émet ni `RequestHandled` ni les events Octane : sans ce flush,
+     * le BufferHandler du channel `openobserve` accumule les logs émis pendant `handle()`
+     * (ex. un client d'intégration qui logue chaque appel HTTP) et ne les envoie jamais —
+     * `__destruct` n'est pas fiable sur un worker tué par SIGTERM/SIGKILL au redéploiement.
+     *
+     * Indépendant de `job_log.enabled` (qui ne contrôle que le log job_processed/job_failed
+     * lui-même) : désactiver ce flag ne doit pas casser le flush des logs applicatifs émis
+     * par le code métier du job. Couvre JobProcessed ET JobFailed/JobTimedOut pour ne jamais
+     * perdre les logs d'un job en échec, souvent les plus utiles au diagnostic.
+     */
+    private function registerQueueWorkerFlush(): void
+    {
+        $events = $this->app['events'];
+
+        $flush = function () {
+            $this->flushOpenObserveChannel();
+        };
+
+        $events->listen(JobProcessed::class, $flush);
+        $events->listen(JobFailed::class, $flush);
+        $events->listen(JobTimedOut::class, $flush);
     }
 
     /**

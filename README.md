@@ -53,6 +53,14 @@ sinon un UUID v4 généré) pour corréler tous les logs d'une même requête. L
 `extra` sont aplaties en colonnes préfixées (`context_<clé>`, `extra_<clé>`) ; tout sous-tableau ou
 objet est sérialisé en une seule colonne JSON pour garder un schéma OpenObserve stable.
 
+> ℹ️ Le format de `request_id` varie selon la source du header : `X-Request-Id` est repris tel
+> quel (souvent un UUID applicatif), `X-Amzn-Trace-Id` (posé par l'ALB) est conservé brut sous sa
+> forme `Root=1-<...>-<...>;Parent=...;Sampled=...` plutôt que d'en extraire uniquement `Root=`.
+> Ce choix est volontaire : la valeur brute reste directement grep-able dans AWS X-Ray/CloudWatch
+> pour croiser les traces ALB. Ce n'est pas un bug — un support qui corrèle par `request_id` doit
+> juste s'attendre à deux formats possibles selon que l'appelant fournissait `X-Request-Id` ou
+> passait par un ALB avec X-Ray activé.
+
 ## Health
 
 - `GET /health` — **liveness pure** : toujours `200`, aucune dépendance. À brancher sur l'ALB.
