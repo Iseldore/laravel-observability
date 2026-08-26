@@ -19,6 +19,7 @@ return [
     | Ajouté à chaque log (champ "service") pour filtrer dans OpenObserve.
     */
 
+    // OBSERVABILITY_SERVICE distingue chaque appli GYSC dans OpenObserve : à définir par appli.
     'service' => env('OBSERVABILITY_SERVICE', env('APP_NAME', 'laravel')),
 
     /*
@@ -28,11 +29,13 @@ return [
     */
 
     'openobserve' => [
-        'url' => env('OPENOBSERVE_URL', 'https://openobserve.example.com'),
-        'org' => env('OPENOBSERVE_ORG', 'default'),
-        'stream' => env('OPENOBSERVE_STREAM', 'default'),
+        // Secrets / infra propres à chaque environnement : jamais de défaut en dur ici.
+        'url' => env('OPENOBSERVE_URL'),
         'user' => env('OPENOBSERVE_USER'),
         'token' => env('OPENOBSERVE_TOKEN'),
+        // Seule variable à renseigner en plus de OPENOBSERVE_ENABLED : diffère par environnement.
+        'stream' => env('OPENOBSERVE_STREAM', 'default'),
+        'org' => env('OPENOBSERVE_ORG', 'default'),
         // Timeouts HTTP courts : l'envoi ne doit jamais bloquer un worker.
         'timeout' => (float) env('OPENOBSERVE_TIMEOUT', 2),
         'connect_timeout' => (float) env('OPENOBSERVE_CONNECT_TIMEOUT', 1),
@@ -72,7 +75,7 @@ return [
     'logs' => [
         // Connexion de queue utilisée pour dispatcher l'envoi (null = défaut de l'app).
         'queue_connection' => env('OPENOBSERVE_QUEUE_CONNECTION'),
-        'queue' => env('OPENOBSERVE_QUEUE'),
+        'queue' => env('OPENOBSERVE_QUEUE', 'observability'),
         // 0 = pas de limite de buffer dans la requête (flush en fin de requête).
         'buffer_limit' => (int) env('OPENOBSERVE_BUFFER_LIMIT', 0),
     ],
@@ -86,7 +89,7 @@ return [
     */
 
     'request_log' => [
-        'enabled' => env('REQUEST_LOG', false),
+        'enabled' => env('REQUEST_LOG', true),
     ],
 
     /*
@@ -98,7 +101,7 @@ return [
     */
 
     'job_log' => [
-        'enabled' => env('JOB_LOG', false),
+        'enabled' => env('JOB_LOG', true),
     ],
 
     /*
@@ -110,7 +113,7 @@ return [
     */
 
     'auth_log' => [
-        'enabled' => env('AUTH_LOG', false),
+        'enabled' => env('AUTH_LOG', true),
     ],
 
     /*
@@ -123,7 +126,7 @@ return [
     */
 
     'outbound_http_log' => [
-        'enabled' => env('OUTBOUND_HTTP_LOG', false),
+        'enabled' => env('OUTBOUND_HTTP_LOG', true),
     ],
 
     /*
@@ -135,7 +138,7 @@ return [
     */
 
     'scheduler_log' => [
-        'enabled' => env('SCHEDULER_LOG', false),
+        'enabled' => env('SCHEDULER_LOG', true),
     ],
 
     /*
@@ -148,7 +151,7 @@ return [
     */
 
     'exception_log' => [
-        'enabled' => env('EXCEPTION_LOG', false),
+        'enabled' => env('EXCEPTION_LOG', true),
     ],
 
     /*
@@ -173,7 +176,7 @@ return [
     */
 
     'slow_query' => [
-        'enabled'      => env('SLOW_QUERY_LOG', false),
+        'enabled'      => env('SLOW_QUERY_LOG', true),
         'threshold_ms' => (float) env('SLOW_QUERY_THRESHOLD_MS', 1000),
         'log_bindings' => env('SLOW_QUERY_LOG_BINDINGS', false),
     ],
