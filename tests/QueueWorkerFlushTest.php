@@ -32,7 +32,9 @@ it('flush le channel openobserve quand un job se termine (JobProcessed)', functi
     fireJobEventWithoutJobInstance(JobProcessed::class);
 
     Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        return collect($job->batch)->contains(fn ($record) => $record['message'] === 'log émis pendant handle() du job');
+        return collect($job->batch)->contains(function ($record) {
+            return $record['message'] === 'log émis pendant handle() du job';
+        });
     });
 });
 
@@ -44,7 +46,9 @@ it('flush le channel openobserve quand un job échoue (JobFailed)', function () 
     fireJobEventWithoutJobInstance(JobFailed::class);
 
     Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        return collect($job->batch)->contains(fn ($record) => $record['message'] === 'erreur pendant handle() du job');
+        return collect($job->batch)->contains(function ($record) {
+            return $record['message'] === 'erreur pendant handle() du job';
+        });
     });
 });
 
@@ -60,7 +64,9 @@ it('flush le channel openobserve quand un job time out (JobTimedOut)', function 
     fireJobEventWithoutJobInstance(JobTimedOut::class);
 
     Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        return collect($job->batch)->contains(fn ($record) => $record['message'] === 'log avant timeout');
+        return collect($job->batch)->contains(function ($record) {
+            return $record['message'] === 'log avant timeout';
+        });
     });
 });
 
@@ -75,7 +81,9 @@ it('flush même si job_log.enabled est désactivé', function () {
     fireJobEventWithoutJobInstance(JobProcessed::class);
 
     Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        return collect($job->batch)->contains(fn ($record) => $record['message'] === 'log applicatif indépendant de job_log');
+        return collect($job->batch)->contains(function ($record) {
+            return $record['message'] === 'log applicatif indépendant de job_log';
+        });
     });
 });
 
