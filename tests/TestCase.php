@@ -23,6 +23,7 @@ abstract class TestCase extends Orchestra
         // Pas de throttle en test (évite la dépendance cache/rate-limiter).
         $config->set('observability.health.deep_throttle', null);
         $config->set('observability.request_log.enabled', true);
+        $config->set('observability.cache_log.enabled', true);
         // Désactivé par défaut : JobLogger attend $event->connectionName, absent des events
         // simulés sans instance de Job réelle dans QueueWorkerFlushTest. Les tests dédiés à
         // job_log l'activent explicitement.

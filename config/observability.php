@@ -189,6 +189,8 @@ return [
     | prefix         : préfixe optionnel (vide = /health à la racine, requis pour l'ALB).
     | deep_token     : si défini, /health/deep exige ?token= ou header X-Health-Token.
     | deep_throttle  : "tentatives,minutes" pour le rate-limit de /health/deep.
+    | db_timeout     : timeout (secondes) forcé sur la connexion PDO du check DB — évite
+    |                   qu'une base indisponible/figée bloque le worker qui sert /health/deep.
     */
 
     'health' => [
@@ -196,6 +198,7 @@ return [
         'prefix' => env('OBSERVABILITY_HEALTH_PREFIX', ''),
         'deep_token' => env('HEALTH_TOKEN'),
         'deep_throttle' => env('HEALTH_DEEP_THROTTLE', '30,1'),
+        'db_timeout' => env('HEALTH_DB_TIMEOUT', 2),
         // Checks activés sur /health/deep. Un check absent ou non configurable → "skipped".
         'checks' => [
             'db' => env('HEALTH_CHECK_DB', true),

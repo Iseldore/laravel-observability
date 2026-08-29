@@ -3,7 +3,9 @@
 namespace Iseldore\Observability\Exception;
 
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\ContextProcessor;
 use Iseldore\Observability\Logging\OpenObserveHandler;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Log\Events\MessageLogged;
 
 class ExceptionLogger
@@ -50,7 +52,12 @@ class ExceptionLogger
                 'exception_file'    => $exception->getFile(),
                 'exception_line'    => $exception->getLine(),
                 'exception_trace'   => $this->formatTrace($exception),
+                'request_id'        => RequestId::resolve(),
             ];
+
+            // Contexte applicatif (user_id/user_email…) : parité avec RequestLogger.
+            // Ne surcharge jamais une clé déjà posée par ce payload.
+            $payload += ContextProcessor::resolveConfigured();
 
             SendLogsToOpenObserve::dispatchSafe([$payload]);
         } catch (\Throwable $e) {

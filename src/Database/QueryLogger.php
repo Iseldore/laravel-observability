@@ -3,6 +3,8 @@
 namespace Iseldore\Observability\Database;
 
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\ContextProcessor;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Database\Events\QueryExecuted;
 
 /**
@@ -38,11 +40,16 @@ class QueryLogger
                 'duration_ms'=> round($event->time, 2),
                 'sql'        => $event->sql,
                 'connection' => $event->connectionName,
+                'request_id' => RequestId::resolve(),
             ];
 
             if ($config['slow_query']['log_bindings'] ?? false) {
                 $payload['bindings'] = $event->bindings;
             }
+
+            // Contexte applicatif (user_id/user_email…) : parité avec RequestLogger.
+            // Ne surcharge jamais une clé déjà posée par ce payload.
+            $payload += ContextProcessor::resolveConfigured();
 
             SendLogsToOpenObserve::dispatchSafe([$payload]);
         } catch (\Throwable $e) {

@@ -84,7 +84,7 @@ it('aplatit les sous-tableaux de context en une seule colonne JSON string (sché
         'level_name' => 'INFO',
         'datetime' => new DateTimeImmutable(),
         'context' => [
-            'user_id' => 42,                       // scalaire → colonne typée
+            'account_id' => 42,                    // scalaire → colonne typée
             'roles' => ['admin', 'editor'],        // tableau → une seule colonne texte JSON
         ],
         'extra' => [],
@@ -92,9 +92,45 @@ it('aplatit les sous-tableaux de context en une seule colonne JSON string (sché
 
     $out = RecordNormalizer::toArray($record, 'svc', 'testing');
 
-    expect($out['context_user_id'])->toBe(42)
+    expect($out['context_account_id'])->toBe(42)
         ->and($out['context_roles'])->toBe('["admin","editor"]')
         ->and($out)->not->toHaveKey('context_roles_0'); // pas d'explosion de colonnes
+});
+
+it('encode une liste indexée pure de context en une seule colonne JSON (pas de context_0, context_1, ...)', function () {
+    $record = [
+        'message' => 'erreur avec stack trace',
+        'level' => 400,
+        'level_name' => 'ERROR',
+        'datetime' => new DateTimeImmutable(),
+        'context' => ['file.php:10', 'file.php:20', 'file.php:30'],
+        'extra' => [],
+    ];
+
+    $out = RecordNormalizer::toArray($record, 'svc', 'testing');
+
+    expect($out['context'])->toBe('["file.php:10","file.php:20","file.php:30"]')
+        ->and($out)->not->toHaveKey('context_0')
+        ->and($out)->not->toHaveKey('context_1');
+});
+
+it('promeut user_id et user_email écrits manuellement dans context (pas seulement extra)', function () {
+    $record = [
+        'message' => 'log manuel',
+        'level' => 200,
+        'level_name' => 'INFO',
+        'datetime' => new DateTimeImmutable(),
+        'context' => ['user_id' => 99, 'user_email' => 'manual@example.com', 'foo' => 'bar'],
+        'extra' => [],
+    ];
+
+    $out = RecordNormalizer::toArray($record, 'svc', 'testing');
+
+    expect($out['user_id'])->toBe(99)
+        ->and($out['user_email'])->toBe('manual@example.com')
+        ->and($out['context_foo'])->toBe('bar')
+        ->and($out)->not->toHaveKey('context_user_id')
+        ->and($out)->not->toHaveKey('context_user_email');
 });
 
 it('rend le payload JSON-sérialisable même avec des valeurs exotiques', function () {

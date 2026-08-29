@@ -226,9 +226,17 @@ class ObservabilityServiceProvider extends ServiceProvider
             $events->listen($missed, [$logger, 'handleMissed']);
         }
 
-        $events->listen(RequestHandled::class, function () use ($logger) {
+        $cacheFlush = function () use ($logger) {
             $logger->flush();
-        });
+        };
+
+        // Un worker de queue/Octane persiste entre jobs/requêtes sans jamais émettre
+        // RequestHandled : sans ce flush, les compteurs statiques hits/misses s'accumulent
+        // indéfiniment (fuite mémoire) et ne sont jamais logués.
+        $events->listen(RequestHandled::class, $cacheFlush);
+        $events->listen(JobProcessed::class, $cacheFlush);
+        $events->listen(JobFailed::class, $cacheFlush);
+        $events->listen(JobTimedOut::class, $cacheFlush);
     }
 
     /**
@@ -293,6 +301,10 @@ class ObservabilityServiceProvider extends ServiceProvider
      * lui-même) : désactiver ce flag ne doit pas casser le flush des logs applicatifs émis
      * par le code métier du job. Couvre JobProcessed ET JobFailed/JobTimedOut pour ne jamais
      * perdre les logs d'un job en échec, souvent les plus utiles au diagnostic.
+     *
+     * Réinitialise aussi `RequestId` : sans ce flush, le request_id résolu pour le premier
+     * job traité par le worker resterait posé comme binding singleton et fuiterait vers tous
+     * les jobs suivants, rendant la corrélation de logs par job totalement fausse.
      */
     private function registerQueueWorkerFlush(): void
     {
@@ -300,6 +312,7 @@ class ObservabilityServiceProvider extends ServiceProvider
 
         $flush = function () {
             $this->flushOpenObserveChannel();
+            RequestId::flush();
         };
 
         $events->listen(JobProcessed::class, $flush);

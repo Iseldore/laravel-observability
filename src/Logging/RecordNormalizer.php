@@ -53,6 +53,10 @@ class RecordNormalizer
                 $payload[$promoted] = $extra[$promoted];
                 unset($extra[$promoted]);
             }
+            if (isset($context[$promoted])) {
+                $payload[$promoted] = $context[$promoted];
+                unset($context[$promoted]);
+            }
         }
 
         if (! empty($context)) {
@@ -113,6 +117,15 @@ class RecordNormalizer
     private static function flattenTop(string $prefix, array $data): array
     {
         $out = [];
+
+        // Liste indexée pure (ex. stack trace, tableau de modèles) → une seule colonne
+        // JSON plutôt que context_0, context_1, ... qui feraient exploser le schéma.
+        if (self::isList($data)) {
+            $out[$prefix] = json_encode(self::sanitize($data), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            return $out;
+        }
+
         foreach (self::sanitize($data) as $key => $value) {
             $column = $prefix.'_'.$key;
             if (is_scalar($value) || $value === null) {
@@ -124,6 +137,18 @@ class RecordNormalizer
         }
 
         return $out;
+    }
+
+    /**
+     * Équivalent de `array_is_list` (PHP 8.1+), pour rester compatible PHP 7.3.
+     */
+    private static function isList(array $data): bool
+    {
+        if ($data === []) {
+            return false;
+        }
+
+        return array_keys($data) === range(0, count($data) - 1);
     }
 
     /**

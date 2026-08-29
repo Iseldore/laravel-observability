@@ -2,9 +2,10 @@
 
 namespace Iseldore\Observability\Http\Controllers;
 
+use Illuminate\Database\Connectors\ConnectionFactory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Config;
 
 /**
  * Routes health.
@@ -45,11 +46,33 @@ class HealthController
         );
     }
 
-    /** `SELECT 1` sur la connexion par défaut. */
+    /**
+     * `SELECT 1` sur une connexion dédiée au check, clonée depuis la connexion par défaut
+     * avec un `PDO::ATTR_TIMEOUT` court forcé dans les options — sans lui, une base
+     * indisponible/figée (sans être close) bloque l'établissement de connexion jusqu'au
+     * timeout par défaut du driver (souvent 30-60s), ce qui sature rapidement les workers
+     * du pool sous ping régulier. `setAttribute` sur une connexion déjà résolue n'a aucun
+     * effet ici : le timeout PDO ne s'applique qu'à la connexion initiale, d'où la nécessité
+     * de l'injecter dans les options AVANT que PDO ne se connecte.
+     */
     private function checkDatabase(): string
     {
         return $this->guard(function () {
-            DB::connection()->select('select 1');
+            $name = config('database.default');
+            $config = Config::get('database.connections.'.$name, []);
+            $timeout = (int) config('observability.health.db_timeout', 2);
+
+            if ($timeout > 0) {
+                $config['options'] = ($config['options'] ?? []) + [\PDO::ATTR_TIMEOUT => $timeout];
+            }
+
+            $connection = (new ConnectionFactory(app()))->make($config, $name);
+
+            try {
+                $connection->select('select 1');
+            } finally {
+                $connection->disconnect();
+            }
 
             return 'ok';
         });

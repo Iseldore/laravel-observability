@@ -1,6 +1,8 @@
 <?php
 
+use Iseldore\Observability\Cache\CacheLogger;
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobTimedOut;
@@ -93,4 +95,30 @@ it('ne pousse rien si aucun log n’a été émis avant la fin du job', function
     fireJobEventWithoutJobInstance(JobProcessed::class);
 
     Queue::assertNothingPushed();
+});
+
+it('réinitialise request_id à la fin d’un job pour ne pas le faire fuiter vers le job suivant', function () {
+    $firstRequestId = RequestId::resolve();
+
+    fireJobEventWithoutJobInstance(JobProcessed::class);
+
+    $secondRequestId = RequestId::resolve();
+
+    expect($secondRequestId)->not->toBe($firstRequestId);
+});
+
+it('flush CacheLogger (hits/misses) à la fin d’un job', function () {
+    Queue::fake();
+
+    $logger = app(CacheLogger::class);
+    $logger->handleHit((object) ['key' => 'produit:42']);
+    $logger->handleMissed((object) ['key' => 'produit:43']);
+
+    fireJobEventWithoutJobInstance(JobProcessed::class);
+
+    Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
+        return collect($job->batch)->contains(function ($record) {
+            return $record['message'] === 'cache_stats' && $record['hits'] === 1 && $record['misses'] === 1;
+        });
+    });
 });

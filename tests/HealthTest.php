@@ -59,6 +59,25 @@ it('/health/deep ne fuite jamais de détail d’exception', function () {
         ->and($body)->not->toContain('240.0.0.1');
 })->skip(function () { return getenv('CI') !== false; }, 'connexion réseau lente en CI');
 
+it('/health/deep applique un timeout court même sans PDO::ATTR_TIMEOUT dans la config de connexion', function () {
+    // Pas de `options => [PDO::ATTR_TIMEOUT]` ici : le check doit forcer son propre
+    // timeout côté HealthController, sans dépendre de la config DB de l'app hôte.
+    config()->set('database.default', 'broken');
+    config()->set('database.connections.broken', [
+        'driver' => 'mysql', 'host' => '240.0.0.1',
+        'database' => 'x', 'username' => 'x', 'password' => 'x',
+    ]);
+    config()->set('observability.health.db_timeout', 1);
+    config()->set('cache.default', 'array');
+    config()->set('queue.default', 'sync');
+
+    $start = microtime(true);
+    $this->get('/health/deep')->assertStatus(503)->assertJson(['db' => 'fail']);
+    $elapsed = microtime(true) - $start;
+
+    expect($elapsed)->toBeLessThan(5.0);
+})->skip(function () { return getenv('CI') !== false; }, 'connexion réseau lente en CI');
+
 it('/health/deep bloque sans le bon token', function () {
     config()->set('observability.health.deep_token', 'secret');
 
