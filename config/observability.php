@@ -76,6 +76,8 @@ return [
         // Connexion de queue utilisée pour dispatcher l'envoi (null = défaut de l'app).
         'queue_connection' => env('OPENOBSERVE_QUEUE_CONNECTION'),
         'queue' => env('OPENOBSERVE_QUEUE', 'observability'),
+        // Masque SendLogsToOpenObserve des « Recent Jobs » d'Horizon (ajout à horizon.silenced).
+        'silence_in_horizon' => (bool) env('OPENOBSERVE_SILENCE_IN_HORIZON', true),
         // 0 = pas de limite de buffer dans la requête (flush en fin de requête).
         'buffer_limit' => (int) env('OPENOBSERVE_BUFFER_LIMIT', 0),
     ],
@@ -86,10 +88,19 @@ return [
     |--------------------------------------------------------------------------
     | Logge chaque requête avec method, path, status_code, duration_ms.
     | Les assets statiques (js/css/images) sont filtrés automatiquement.
+    |
+    | except : patterns (Str::is, wildcards "*" supportés) comparés au path (sans
+    |          slash initial) ET au nom de route. Un seul match suffit à exclure.
+    |          Ex : 'api/v2/salto/ID/gate-logs' avec un wildcard à la place de ID
+    |          (path), ou 'salto.gateLogs' (nom de route).
     */
 
     'request_log' => [
         'enabled' => env('REQUEST_LOG', true),
+        'except' => [
+            // 'api/v2/salto/*/gate-logs',
+            // 'salto.gateLogs',
+        ],
     ],
 
     /*

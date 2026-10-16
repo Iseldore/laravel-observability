@@ -6,6 +6,7 @@ use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Iseldore\Observability\Logging\ContextProcessor;
 use Iseldore\Observability\Support\RequestId;
 use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Support\Str;
 
 /**
  * Logge chaque requête HTTP entrante avec method, path, status et duration.
@@ -32,6 +33,12 @@ class RequestLogger
             // Filtrer les assets statiques
             $path = $request->path();
             if (preg_match('/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|map)$/i', $path)) {
+                return;
+            }
+
+            // Filtrer les routes explicitement exclues (path pattern via Str::is, ou nom de route).
+            $except = $config['request_log']['except'] ?? [];
+            if ($except && $this->isExcluded($request, $except)) {
                 return;
             }
 
@@ -89,5 +96,31 @@ class RequestLogger
         } catch (\Throwable $e) {
             error_log('[observability] request_logger failed: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Compare le path (sans slash initial) et le nom de route de $request aux patterns
+     * fournis dans $except via Str::is (wildcards "*" supportés, ex: "salto/*", "salto.*").
+     */
+    private function isExcluded($request, array $except): bool
+    {
+        $path = $request->path();
+        $routeName = null;
+        $route = $request->route();
+        if ($route !== null) {
+            $routeName = $route->getName();
+        }
+
+        foreach ($except as $pattern) {
+            if (Str::is($pattern, $path)) {
+                return true;
+            }
+
+            if ($routeName !== null && Str::is($pattern, $routeName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

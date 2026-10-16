@@ -18,6 +18,10 @@ function defineTestRoute(): void
 
         return response('ok');
     });
+
+    Route::get('/observability-excluded-route', function () {
+        return response('ok');
+    })->name('observability.excluded');
 }
 
 function flushOpenObserveBuffer(): void
@@ -132,24 +136,74 @@ it('user_id/user_email sont présents sur http_request quand un utilisateur est 
     });
 
     $this->get('/observability-test-route')->assertOk();
+    flushOpenObserveBuffer();
 
-    Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        $httpRequest = collect($job->batch)->firstWhere('message', 'http_request');
+    $httpRequest = collect(Queue::pushed(SendLogsToOpenObserve::class))
+        ->flatMap(function ($job) {
+            return $job->batch;
+        })
+        ->firstWhere('message', 'http_request');
 
-        return $httpRequest['user_id'] === 42
-            && $httpRequest['user_email'] === 'user@example.test';
-    });
+    expect($httpRequest)->not->toBeNull()
+        ->and($httpRequest['user_id'])->toBe(42)
+        ->and($httpRequest['user_email'])->toBe('user@example.test');
 });
 
 it('user_id/user_email sont absents sur http_request hors contexte authentifié (pas d’erreur)', function () {
     Queue::fake();
 
     $this->get('/observability-test-route')->assertOk();
+    flushOpenObserveBuffer();
+
+    $httpRequest = collect(Queue::pushed(SendLogsToOpenObserve::class))
+        ->flatMap(function ($job) {
+            return $job->batch;
+        })
+        ->firstWhere('message', 'http_request');
+
+    expect($httpRequest)->not->toBeNull()
+        ->and($httpRequest)->not->toHaveKey('user_id')
+        ->and($httpRequest)->not->toHaveKey('user_email');
+});
+
+it('n’émet pas http_request quand le path matche un pattern de request_log.except', function () {
+    Queue::fake();
+    config()->set('observability.request_log.except', ['observability-excluded-route']);
+
+    $this->get('/observability-excluded-route')->assertOk();
+    flushOpenObserveBuffer();
+
+    Queue::assertNotPushed(SendLogsToOpenObserve::class);
+});
+
+it('n’émet pas http_request quand le nom de route matche un pattern de request_log.except', function () {
+    Queue::fake();
+    config()->set('observability.request_log.except', ['observability.excluded']);
+
+    $this->get('/observability-excluded-route')->assertOk();
+    flushOpenObserveBuffer();
+
+    Queue::assertNotPushed(SendLogsToOpenObserve::class);
+});
+
+it('supporte les wildcards dans request_log.except', function () {
+    Queue::fake();
+    config()->set('observability.request_log.except', ['observability-excluded-*']);
+
+    $this->get('/observability-excluded-route')->assertOk();
+    flushOpenObserveBuffer();
+
+    Queue::assertNotPushed(SendLogsToOpenObserve::class);
+});
+
+it('continue à émettre http_request pour les routes non exclues quand request_log.except est défini', function () {
+    Queue::fake();
+    config()->set('observability.request_log.except', ['observability-excluded-route']);
+
+    $this->get('/observability-test-route')->assertOk();
+    flushOpenObserveBuffer();
 
     Queue::assertPushed(SendLogsToOpenObserve::class, function ($job) {
-        $httpRequest = collect($job->batch)->firstWhere('message', 'http_request');
-
-        return ! array_key_exists('user_id', $httpRequest)
-            && ! array_key_exists('user_email', $httpRequest);
+        return collect($job->batch)->firstWhere('message', 'http_request') !== null;
     });
 });
