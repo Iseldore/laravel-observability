@@ -105,14 +105,24 @@ it('logge un échec de connexion sortant en erreur, sans query string', function
         ->and($record['host'])->toBe('api.partner.test')
         ->and($record['path'])->toBe('/v1/cards')
         ->and($record['method'])->toBe('GET')
-        ->and($record['error_class'])->toBe(ConnectionException::class)
-        ->and($record['error_message'])->toContain('Could not resolve host')
-        ->and($record['error_message'])->not->toContain('SECRET')
         ->and($record['request_id'])->not->toBeEmpty()
         ->and($record)->not->toHaveKey('status_code');
+
+    // ConnectionFailed::$exception n'existe que sur les versions récentes de Laravel.
+    if (property_exists(ConnectionFailed::class, 'exception')) {
+        expect($record['error_class'])->toBe(ConnectionException::class)
+            ->and($record['error_message'])->toContain('Could not resolve host')
+            ->and($record['error_message'])->not->toContain('SECRET');
+    } else {
+        expect($record)->not->toHaveKey('error_message');
+    }
 });
 
 it('borne error_message à 300 caractères', function () {
+    if (! property_exists(ConnectionFailed::class, 'exception')) {
+        $this->markTestSkipped('ConnectionFailed::$exception absent de cette version de Laravel.');
+    }
+
     Queue::fake();
 
     app('events')->dispatch(connectionFailedEvent('https://api.partner.test/x', str_repeat('e', 1000)));
