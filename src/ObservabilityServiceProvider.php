@@ -16,6 +16,7 @@ use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Iseldore\Observability\Logging\OpenObserveHandler;
 use Iseldore\Observability\Queue\JobLogger;
 use Iseldore\Observability\Scheduler\SchedulerLogger;
+use Iseldore\Observability\Support\DbStats;
 use Iseldore\Observability\Support\RequestId;
 use Illuminate\Auth\Events\Failed as AuthFailed;
 use Illuminate\Auth\Events\Login as AuthLogin;
@@ -27,6 +28,7 @@ use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -57,6 +59,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->registerHeartbeatSchedule();
         $this->registerSlowQueryLogger();
         $this->registerRequestLogger();
+        $this->registerDbStats();
         $this->registerJobLogger();
         $this->registerAuthLogger();
         $this->registerOutboundHttpLogger();
@@ -135,6 +138,21 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->app['events']->listen(QueryExecuted::class, QueryLogger::class);
     }
 
+    /**
+     * Compteurs SQL du scope courant (request_log.db_stats). Indépendant de slow_query.enabled :
+     * c'est un listener QueryExecuted distinct, enregistré seulement si l'option est active.
+     */
+    private function registerDbStats(): void
+    {
+        if (! DbStats::enabled()) {
+            return;
+        }
+
+        $this->app['events']->listen(QueryExecuted::class, function (QueryExecuted $event) {
+            DbStats::record((float) $event->time);
+        });
+    }
+
     private function registerRequestLogger(): void
     {
         if (! config('observability.request_log.enabled')) {
@@ -157,6 +175,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     {
         $this->app['events']->listen(RequestHandled::class, function () {
             RequestId::flush();
+            DbStats::reset();
         });
     }
 
@@ -169,6 +188,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         $events = $this->app['events'];
         $logger = app(JobLogger::class);
 
+        $events->listen(JobProcessing::class, [$logger, 'handleProcessing']);
         $events->listen(JobProcessed::class, [$logger, 'handleProcessed']);
         $events->listen(JobFailed::class,    [$logger, 'handleFailed']);
         $events->listen(JobTimedOut::class,  [$logger, 'handleTimedOut']);
@@ -194,7 +214,13 @@ class ObservabilityServiceProvider extends ServiceProvider
             return;
         }
 
-        $this->app['events']->listen(ResponseReceived::class, OutboundHttpLogger::class);
+        $events = $this->app['events'];
+        $events->listen(ResponseReceived::class, OutboundHttpLogger::class);
+
+        // Événement absent des Laravel 8 les plus anciens : abonnement défensif par nom de classe.
+        if (class_exists('Illuminate\\Http\\Client\\Events\\ConnectionFailed')) {
+            $events->listen('Illuminate\\Http\\Client\\Events\\ConnectionFailed', [app(OutboundHttpLogger::class), 'handleConnectionFailed']);
+        }
     }
 
     private function registerSchedulerLogger(): void
@@ -277,6 +303,7 @@ class ObservabilityServiceProvider extends ServiceProvider
     {
         $this->app['events']->listen('Laravel\Octane\Events\RequestReceived', function () {
             RequestId::markStart();
+            DbStats::reset();
         });
     }
 
@@ -298,6 +325,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         $flush = function () {
             $this->flushOpenObserveChannel();
             RequestId::flush();
+            DbStats::reset();
         };
 
         foreach ([
@@ -332,6 +360,7 @@ class ObservabilityServiceProvider extends ServiceProvider
         $flush = function () {
             $this->flushOpenObserveChannel();
             RequestId::flush();
+            DbStats::reset();
         };
 
         $events->listen(JobProcessed::class, $flush);

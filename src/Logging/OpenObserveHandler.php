@@ -2,7 +2,9 @@
 
 namespace Iseldore\Observability\Logging;
 
+use Iseldore\Observability\Exception\ExceptionLogger;
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Illuminate\Support\Str;
 use Monolog\Handler\AbstractProcessingHandler;
 
 /**
@@ -24,6 +26,9 @@ class OpenObserveHandler extends AbstractProcessingHandler
      */
     public static $sending = false;
 
+    /** Niveaux jamais filtrés par `logs.except_messages`. */
+    private const NOT_FILTERABLE_LEVELS = ['warning', 'error', 'critical', 'alert', 'emergency'];
+
     /** @var string */
     private $service;
 
@@ -35,6 +40,26 @@ class OpenObserveHandler extends AbstractProcessingHandler
         parent::__construct($level, $bubble);
         $this->service = $service;
         $this->env = $env;
+    }
+
+    /**
+     * Records à ne pas envoyer :
+     *  - mode merge : ceux déjà couverts par un document `exception` complet (ExceptionLogger) ;
+     *  - `logs.except_messages` : bruit applicatif connu, uniquement sous le niveau warning.
+     *
+     * @param  array|\Monolog\LogRecord  $record
+     */
+    private function shouldSkip($record, bool $mergeExceptions, array $exceptMessages): bool
+    {
+        list($level, $message, $context) = RecordNormalizer::parts($record);
+
+        if ($mergeExceptions && ExceptionLogger::shouldCapture($level, $message, $context)) {
+            return true;
+        }
+
+        return $exceptMessages !== []
+            && ! in_array($level, self::NOT_FILTERABLE_LEVELS, true)
+            && Str::is($exceptMessages, $message);
     }
 
     /**
@@ -60,8 +85,16 @@ class OpenObserveHandler extends AbstractProcessingHandler
 
         self::$sending = true;
         try {
+            $mergeExceptions = (bool) config('observability.exception_log.enabled')
+                && config('observability.exception_log.mode', 'merge') === 'merge';
+            $exceptMessages = array_filter((array) config('observability.logs.except_messages', []));
+
             $payloads = [];
             foreach ($records as $record) {
+                if ($this->shouldSkip($record, $mergeExceptions, $exceptMessages)) {
+                    continue;
+                }
+
                 $payloads[] = RecordNormalizer::toArray($record, $this->service, $this->env);
             }
 

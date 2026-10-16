@@ -80,6 +80,10 @@ return [
         'silence_in_horizon' => (bool) env('OPENOBSERVE_SILENCE_IN_HORIZON', true),
         // 0 = pas de limite de buffer dans la requête (flush en fin de requête).
         'buffer_limit' => (int) env('OPENOBSERVE_BUFFER_LIMIT', 0),
+        // Patterns (Str::is, wildcards "*") comparés au message des logs de niveau < warning :
+        // ceux qui matchent ne sont pas envoyés à OpenObserve (bruit applicatif connu). Les
+        // warning/error ne sont jamais filtrés. Ex : ['SOQL Query', '[SalesForce] Success request*'].
+        'except_messages' => [],
     ],
 
     /*
@@ -93,6 +97,17 @@ return [
     |          slash initial) ET au nom de route. Un seul match suffit à exclure.
     |          Ex : 'api/v2/salto/ID/gate-logs' avec un wildcard à la place de ID
     |          (path), ou 'salto.gateLogs' (nom de route).
+    |
+    | log_health : false (défaut) exclut /health et /health/deep (routes du package, appelées en
+    |          continu par l'ALB). true pour les logger.
+    |
+    | sampling : [pattern => taux 0.0–1.0], mêmes patterns que `except`. Ne s'applique qu'aux
+    |          réponses < 400 plus rapides que sampling_always_above_ms : une erreur ou une
+    |          requête lente est toujours conservée. Chaque ligne conservée porte `sample_rate`
+    |          (nombre réel de requêtes ≈ count / sample_rate). Ex : ['api/v1/login' => 0.1].
+    |
+    | db_stats : true ajoute db_query_count et db_time_ms à http_request et job_* (détection
+    |          des N+1). Désactivé par défaut (un compteur par requête SQL).
     */
 
     'request_log' => [
@@ -101,6 +116,12 @@ return [
             // 'api/v2/salto/*/gate-logs',
             // 'salto.gateLogs',
         ],
+        'log_health' => (bool) env('REQUEST_LOG_HEALTH', false),
+        'sampling' => [
+            // 'api/v1/login' => 0.1,
+        ],
+        'sampling_always_above_ms' => (float) env('REQUEST_LOG_SAMPLING_ALWAYS_ABOVE_MS', 1000),
+        'db_stats' => (bool) env('REQUEST_LOG_DB_STATS', false),
     ],
 
     /*
@@ -109,10 +130,20 @@ return [
     |--------------------------------------------------------------------------
     | Logge JobProcessed (info), JobFailed (error), JobTimedOut (error).
     | SendLogsToOpenObserve est toujours exclu (anti-récursion).
+    |
+    | Chaque log porte job_uuid, request_id (partagé avec l'`exception` du même job) et
+    | duration_ms (mesurée depuis JobProcessing).
+    |
+    | except : patterns (Str::is, wildcards "*" supportés) comparés à la classe du job. Ne masque
+    |          que job_processed : un échec ou un timeout est toujours loggé.
+    |          Ex : ['App\\Helpers\\Odata\\UpdatePersonalAccessToken'].
     */
 
     'job_log' => [
         'enabled' => env('JOB_LOG', true),
+        'except' => [
+            // 'App\\Helpers\\Odata\\UpdatePersonalAccessToken',
+        ],
     ],
 
     /*
@@ -121,10 +152,15 @@ return [
     |--------------------------------------------------------------------------
     | Logge Login (info), Logout (info), Failed (warning).
     | N'envoie jamais de mot de passe — uniquement email/user_id si disponible.
+    |
+    | events : événements loggés parmi 'login', 'logout', 'failed' (retirer 'login' pour une
+    |          API dont chaque appel s'authentifie : le http_request correspondant suffit).
+    |          Chaque log porte le request_id de la requête.
     */
 
     'auth_log' => [
         'enabled' => env('AUTH_LOG', true),
+        'events' => ['login', 'logout', 'failed'],
     ],
 
     /*
@@ -134,10 +170,18 @@ return [
     | Logge les appels Http:: sortants : method, host, path, status_code, duration_ms.
     | Les appels vers OpenObserve lui-même sont exclus (anti-récursion).
     | Jamais de query string (peut contenir des tokens).
+    |
+    | Les échecs de connexion (DNS, timeout, refus) sont aussi loggés (http_outbound, level
+    | error, error_class / error_message) via l'événement ConnectionFailed.
+    |
+    | except_hosts : hôtes à ne pas logger (ex. service local de rendu '127.0.0.1').
     */
 
     'outbound_http_log' => [
         'enabled' => env('OUTBOUND_HTTP_LOG', true),
+        'except_hosts' => [
+            // '127.0.0.1',
+        ],
     ],
 
     /*
@@ -157,12 +201,20 @@ return [
     | Exception logging structuré
     |--------------------------------------------------------------------------
     | Écoute MessageLogged (level error+) et envoie un payload structuré avec
-    | classe, fichier, ligne, trace (5 frames max). Ne duplique pas les exceptions
-    | déjà traitées par le JobLogger.
+    | classe, fichier, ligne, trace (5 frames max), exception_hash et exception_app_trace
+    | (premières frames hors vendor/ : le code applicatif à l'origine de l'appel).
+    |
+    | mode     : 'merge'  (défaut) le document `exception` est la représentation unique d'un
+    |                     log porteur d'un Throwable : il reprend le message humain (log_message)
+    |                     et le contexte (context_*), le record Monolog brut n'est plus envoyé.
+    |            'legacy' comportement historique : record brut ET document `exception`.
+    | app_frames : nombre de frames applicatives (hors vendor/) conservées dans exception_app_trace.
     */
 
     'exception_log' => [
         'enabled' => env('EXCEPTION_LOG', true),
+        'mode' => env('EXCEPTION_LOG_MODE', 'merge'),
+        'app_frames' => (int) env('EXCEPTION_LOG_APP_FRAMES', 5),
     ],
 
     /*
@@ -184,12 +236,18 @@ return [
     | enabled         : activer l'écoute de QueryExecuted.
     | threshold_ms    : seuil en millisecondes — les requêtes plus lentes sont envoyées.
     | log_bindings    : inclure les bindings SQL (peut contenir des données sensibles).
+    | max_sql_length  : longueur max de `sql` / `sql_fingerprint` (0 = illimité) ; au-delà, le
+    |                   texte est coupé et suffixé de "…[truncated]".
+    |
+    | Chaque log porte aussi sql_fingerprint (SQL normalisé : valeurs et listes IN retirées),
+    | sql_hash (md5 du fingerprint, clé de regroupement) et bindings_count.
     */
 
     'slow_query' => [
         'enabled'      => env('SLOW_QUERY_LOG', true),
         'threshold_ms' => (float) env('SLOW_QUERY_THRESHOLD_MS', 1000),
         'log_bindings' => env('SLOW_QUERY_LOG_BINDINGS', false),
+        'max_sql_length' => (int) env('SLOW_QUERY_MAX_SQL_LENGTH', 2000),
     ],
 
     /*

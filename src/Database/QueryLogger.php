@@ -5,6 +5,7 @@ namespace Iseldore\Observability\Database;
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Iseldore\Observability\Logging\ContextProcessor;
 use Iseldore\Observability\Support\RequestId;
+use Iseldore\Observability\Support\SqlFingerprint;
 use Illuminate\Database\Events\QueryExecuted;
 
 /**
@@ -31,6 +32,9 @@ class QueryLogger
                 return;
             }
 
+            // Empreinte calculée sur le SQL complet, avant toute troncature.
+            $fingerprint = SqlFingerprint::make($event->sql);
+
             $payload = [
                 '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => 'warning',
@@ -38,7 +42,10 @@ class QueryLogger
                 'service'    => (string) ($config['service'] ?? 'laravel'),
                 'env'        => app()->environment(),
                 'duration_ms'=> round($event->time, 2),
-                'sql'        => $event->sql,
+                'sql'        => $this->truncate($event->sql, (int) ($config['slow_query']['max_sql_length'] ?? 2000)),
+                'sql_fingerprint' => $this->truncate($fingerprint, (int) ($config['slow_query']['max_sql_length'] ?? 2000)),
+                'sql_hash'   => SqlFingerprint::hash($fingerprint),
+                'bindings_count' => count($event->bindings),
                 'connection' => $event->connectionName,
                 'request_id' => RequestId::resolve(),
             ];
@@ -55,5 +62,17 @@ class QueryLogger
         } catch (\Throwable $e) {
             error_log('[observability] query_logger failed: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Tronque à $max caractères (0 ou négatif = pas de limite), avec un marqueur explicite.
+     */
+    private function truncate(string $sql, int $max): string
+    {
+        if ($max <= 0 || mb_strlen($sql) <= $max) {
+            return $sql;
+        }
+
+        return mb_substr($sql, 0, $max).'…[truncated]';
     }
 }

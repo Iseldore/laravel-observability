@@ -3,6 +3,8 @@
 namespace Iseldore\Observability\Auth;
 
 use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
+use Iseldore\Observability\Logging\ContextProcessor;
+use Iseldore\Observability\Support\RequestId;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -13,6 +15,9 @@ use Illuminate\Auth\Events\Logout;
  * Login   → level info
  * Logout  → level info
  * Failed  → level warning (tentative échouée — peut indiquer brute-force)
+ *
+ * Chaque log porte le request_id de la requête (rattachement à son http_request) et le contexte
+ * applicatif configuré. `auth_log.events` permet de désactiver login / logout / failed un par un.
  *
  * Aucune donnée sensible : on n'envoie pas le mot de passe.
  * L'email/identifiant est inclus uniquement si c'est une string (pas d'objet).
@@ -43,6 +48,12 @@ class AuthLogger
                 return;
             }
 
+            // auth_login → "login", auth_logout → "logout", auth_failed → "failed"
+            $events = (array) ($config['auth_log']['events'] ?? ['login', 'logout', 'failed']);
+            if (! in_array(substr($message, strlen('auth_')), $events, true)) {
+                return;
+            }
+
             $payload = [
                 '_timestamp' => (int) round(microtime(true) * 1000000),
                 'level'      => $level,
@@ -50,6 +61,7 @@ class AuthLogger
                 'service'    => (string) ($config['service'] ?? 'laravel'),
                 'env'        => app()->environment(),
                 'guard'      => $guard,
+                'request_id' => RequestId::resolve(),
             ];
 
             // Identifier l'utilisateur sans exposer de données sensibles
@@ -66,6 +78,9 @@ class AuthLogger
             if ($message === 'auth_failed' && isset($credentials['email'])) {
                 $payload['attempted_email'] = $credentials['email'];
             }
+
+            // Contexte applicatif configuré : ne surcharge jamais user_id/user_email posés ci-dessus.
+            $payload += ContextProcessor::resolveConfigured();
 
             SendLogsToOpenObserve::dispatchSafe([$payload]);
         } catch (\Throwable $e) {

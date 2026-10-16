@@ -70,6 +70,30 @@ class RecordNormalizer
     }
 
     /**
+     * Niveau (minuscule), message et contexte bruts d'un record, quelle que soit la version de
+     * Monolog — pour les décisions de filtrage qui précèdent la normalisation complète.
+     *
+     * @param  array|\Monolog\LogRecord  $record
+     * @return array{0: string, 1: string, 2: array}
+     */
+    public static function parts($record): array
+    {
+        if (is_array($record)) {
+            return [
+                strtolower((string) ($record['level_name'] ?? $record['level'] ?? '')),
+                (string) ($record['message'] ?? ''),
+                (array) ($record['context'] ?? []),
+            ];
+        }
+
+        return [
+            strtolower(self::levelName($record->level)),
+            (string) $record->message,
+            (array) $record->context,
+        ];
+    }
+
+    /**
      * Nom du niveau pour Monolog 3 (enum `Level`) — tolérant aux variations d'API.
      *
      * @param  mixed  $level
@@ -114,7 +138,7 @@ class RecordNormalizer
      *
      * @return array<string, scalar|null>
      */
-    private static function flattenTop(string $prefix, array $data): array
+    public static function flattenTop(string $prefix, array $data): array
     {
         $out = [];
 

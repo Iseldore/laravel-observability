@@ -3,6 +3,7 @@
 namespace Iseldore\Observability\Console;
 
 use Iseldore\Observability\Support\OpenObserveClient;
+use Iseldore\Observability\Support\SqlFingerprint;
 use Illuminate\Console\Command;
 
 /**
@@ -136,6 +137,9 @@ class ObservabilityTestCommand extends Command
                 'env'         => $env,
                 'duration_ms' => round(500 + ($i + 1) * 250 + mt_rand(0, 100), 2),
                 'sql'         => $queries[$i % count($queries)],
+                'sql_fingerprint' => SqlFingerprint::make($queries[$i % count($queries)]),
+                'sql_hash'    => SqlFingerprint::hash(SqlFingerprint::make($queries[$i % count($queries)])),
+                'bindings_count' => substr_count($queries[$i % count($queries)], '?'),
                 'connection'  => 'mysql',
             ];
         }, range(0, $count - 1));
@@ -166,6 +170,8 @@ class ObservabilityTestCommand extends Command
                 'env'         => $env,
                 'method'      => $method,
                 'path'        => $path,
+                'route_uri'   => preg_replace('~/\d+~', '/{id}', ltrim($path, '/')),
+                'route_action' => 'App\\Http\\Controllers\\ApiController@handle',
                 'status_code' => $status_code,
                 'duration_ms' => round($baseMs + mt_rand(-10, 50), 2),
                 'memory_peak_kb' => mt_rand(8000, 65000),
@@ -199,11 +205,15 @@ class ObservabilityTestCommand extends Command
                 'queue'      => 'default',
                 'connection' => 'redis',
                 'attempts'   => $message === 'job_processed' ? 1 : mt_rand(1, 3),
+                'job_uuid'   => md5($class.$i),
+                'request_id' => md5('request'.$i),
+                'duration_ms' => round(mt_rand(50, 4000) + mt_rand(0, 99) / 100, 2),
             ];
 
             if ($exClass !== null) {
                 $payload['exception_class']   = $exClass;
                 $payload['exception_message'] = $exMsg;
+                $payload['exception_hash']    = md5($exClass.'|'.$exMsg);
             }
 
             return $payload;
@@ -406,6 +416,12 @@ class ObservabilityTestCommand extends Command
                 'exception_message' => $msg,
                 'exception_file'    => $file,
                 'exception_line'    => $line,
+                'exception_hash'    => md5($class.'|'.$file.'|'.$line),
+                'log_message'       => 'Échec lors du traitement ('.$class.')',
+                'request_id'        => md5('request'.$i),
+                'exception_app_trace' => [
+                    'App\Http\Controllers\Controller::handle() at app/Http/Controllers/Controller.php:30',
+                ],
                 'exception_trace'   => [
                     $class.'::__construct() at '.$file.':'.$line,
                     'App\Http\Controllers\Controller::handle() at app/Http/Controllers/Controller.php:30',
