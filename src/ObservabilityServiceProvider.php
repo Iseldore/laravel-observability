@@ -12,6 +12,7 @@ use Iseldore\Observability\Exception\ExceptionLogger;
 use Iseldore\Observability\Http\Middleware\VerifyHealthToken;
 use Iseldore\Observability\Http\OutboundHttpLogger;
 use Iseldore\Observability\Http\RequestLogger;
+use Iseldore\Observability\Jobs\SendLogsToOpenObserve;
 use Iseldore\Observability\Logging\OpenObserveHandler;
 use Iseldore\Observability\Queue\JobLogger;
 use Iseldore\Observability\Scheduler\SchedulerLogger;
@@ -66,6 +67,24 @@ class ObservabilityServiceProvider extends ServiceProvider
         $this->registerOctaneFlush();
         $this->registerQueueWorkerFlush();
         $this->registerRequestIdFlush();
+        $this->silenceInHorizon();
+    }
+
+    /**
+     * Ajoute SendLogsToOpenObserve à `horizon.silenced` pour qu'il n'encombre pas
+     * les « Recent Jobs » du dashboard Horizon (sans effet si Horizon est absent).
+     */
+    private function silenceInHorizon(): void
+    {
+        if (! config('observability.logs.silence_in_horizon', true) || ! class_exists('Laravel\\Horizon\\Horizon')) {
+            return;
+        }
+
+        $silenced = (array) config('horizon.silenced', []);
+        if (! in_array(SendLogsToOpenObserve::class, $silenced, true)) {
+            $silenced[] = SendLogsToOpenObserve::class;
+            config(['horizon.silenced' => $silenced]);
+        }
     }
 
     /**

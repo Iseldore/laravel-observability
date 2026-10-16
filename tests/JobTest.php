@@ -78,3 +78,27 @@ it('n’appelle pas le client si désactivé', function () {
 
     expect($called)->toBeFalse();
 });
+
+it('silence le job dans Horizon quand Horizon est installé', function () {
+    if (! class_exists('Laravel\Horizon\Horizon')) {
+        eval('namespace Laravel\Horizon; class Horizon {}');
+    }
+    config()->set('horizon.silenced', ['App\Jobs\Autre']);
+
+    (new Iseldore\Observability\ObservabilityServiceProvider($this->app))->boot();
+    (new Iseldore\Observability\ObservabilityServiceProvider($this->app))->boot();
+
+    expect(config('horizon.silenced'))->toBe(['App\Jobs\Autre', SendLogsToOpenObserve::class]);
+});
+
+it('ne touche pas à horizon.silenced quand silence_in_horizon est désactivé', function () {
+    if (! class_exists('Laravel\Horizon\Horizon')) {
+        eval('namespace Laravel\Horizon; class Horizon {}');
+    }
+    config()->set('horizon.silenced', []);
+    config()->set('observability.logs.silence_in_horizon', false);
+
+    (new Iseldore\Observability\ObservabilityServiceProvider($this->app))->boot();
+
+    expect(config('horizon.silenced'))->toBe([]);
+});
